@@ -550,9 +550,7 @@
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Saldo Bolsa</span>
-            <span id="kpi-balance-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0">
-              A Favor
-            </span>
+            <span id="kpi-balance-badge" class="hidden"></span>
           </div>
           <div class="my-0.5">
             <span id="kpi-balance" class="text-xl sm:text-3xl font-black tracking-tight text-emerald-600 font-mono block">+0,0 h</span>
@@ -567,9 +565,7 @@
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa DCI (Exceso Real)</span>
-            <span id="kpi-dci-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0">
-              0 d Libres
-            </span>
+            <span id="kpi-dci-badge" class="hidden"></span>
           </div>
           <div class="my-0.5">
             <span id="kpi-dci-hours" class="text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block">0 Días</span>
@@ -584,9 +580,7 @@
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa Vacaciones</span>
-            <span id="kpi-vac-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0">
-              0 d por disfrutar
-            </span>
+            <span id="kpi-vac-badge" class="hidden"></span>
           </div>
           <div class="my-0.5">
             <span id="kpi-vac-value" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 / 0 días</span>
@@ -601,9 +595,7 @@
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Moscosos</span>
-            <span id="kpi-ld-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 shrink-0">
-              0 d por disfrutar
-            </span>
+            <span id="kpi-ld-badge" class="hidden"></span>
           </div>
           <div class="my-0.5">
             <span id="kpi-ld-value" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 / 5 días</span>
@@ -626,7 +618,7 @@
         </button>
         <button type="button" data-tab="table" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
-          <span>2. Resumen (Gerhonte)</span>
+          <span>2. Resumen</span>
         </button>
         <button type="button" data-tab="projection" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>

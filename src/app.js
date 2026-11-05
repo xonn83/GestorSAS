@@ -746,6 +746,10 @@ function renderKpis() {
   const balanceBadge = document.getElementById("kpi-balance-badge");
   const balanceSub = document.getElementById("kpi-balance-sub");
 
+  if (balanceBadge) {
+    balanceBadge.className = "hidden";
+  }
+
   if (balanceEl) {
     const sign = metrics.accumulatedBalance > 0 ? "+" : "";
     balanceEl.textContent = `${sign}${metrics.accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
@@ -753,10 +757,6 @@ function renderKpis() {
     if (metrics.filledMonthsCount === 0) {
       balanceEl.className = "text-xl sm:text-3xl font-black text-slate-700 tracking-tight font-mono block";
       if (balanceLabel) balanceLabel.textContent = "Sin registros aún";
-      if (balanceBadge) {
-        balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
-        balanceBadge.textContent = "Sin datos";
-      }
       if (balanceSub) balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
     } else {
       if (balanceSub) balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h / ${metrics.requiredInFilledMonths.toFixed(1)}h exig. (a ${metrics.lastFilledMonthName})`;
@@ -764,24 +764,12 @@ function renderKpis() {
       if (metrics.accumulatedBalance > 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
-        if (balanceBadge) {
-          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0";
-          balanceBadge.textContent = "A Favor";
-        }
       } else if (metrics.accumulatedBalance < 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
-        if (balanceBadge) {
-          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 shrink-0";
-          balanceBadge.textContent = "Déficit";
-        }
       } else {
         balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
-        if (balanceBadge) {
-          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-800 shrink-0";
-          balanceBadge.textContent = "Al día";
-        }
       }
     }
   }
@@ -794,6 +782,10 @@ function renderKpis() {
   const dciLabelEl = document.getElementById("kpi-dci-label");
   const dciBadgeEl = document.getElementById("kpi-dci-badge");
   const dciSubEl = document.getElementById("kpi-dci-sub");
+
+  if (dciBadgeEl) {
+    dciBadgeEl.className = "hidden";
+  }
 
   if (dciHoursEl) {
     const signDci = metrics.dciDaysAvailable > 0 ? "+" : "";
@@ -809,12 +801,6 @@ function renderKpis() {
       dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Sin exceso de jornada acumulado" : "0 días libres disponibles (÷ 7h)";
     }
   }
-  if (dciBadgeEl) {
-    dciBadgeEl.textContent = metrics.dciDaysAvailable > 0 ? `+${metrics.dciDaysAvailable} d Libres` : "0 d Libres";
-    dciBadgeEl.className = metrics.dciDaysAvailable > 0
-      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0"
-      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
-  }
   if (dciSubEl) {
     dciSubEl.textContent = `${metrics.totalDciConsumedDays} d DCI disfrutados en cuadrante (${metrics.totalDciConsumedHours.toFixed(1)}h)`;
   }
@@ -827,17 +813,15 @@ function renderKpis() {
   const vacBadgeEl = document.getElementById("kpi-vac-badge");
   const vacSubEl = document.getElementById("kpi-vac-sub");
 
+  if (vacBadgeEl) {
+    vacBadgeEl.className = "hidden";
+  }
+
   if (vacValueEl) {
     vacValueEl.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días`;
   }
   if (vacLabelEl) {
     vacLabelEl.textContent = "";
-  }
-  if (vacBadgeEl) {
-    vacBadgeEl.textContent = `${metrics.remainingVacationDays} d por disfrutar`;
-    vacBadgeEl.className = metrics.remainingVacationDays > 0
-      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0"
-      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
   }
   if (vacSubEl) {
     vacSubEl.textContent = metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)";
@@ -851,17 +835,15 @@ function renderKpis() {
   const ldBadgeEl = document.getElementById("kpi-ld-badge");
   const ldSubEl = document.getElementById("kpi-ld-sub");
 
+  if (ldBadgeEl) {
+    ldBadgeEl.className = "hidden";
+  }
+
   if (ldValueEl) {
     ldValueEl.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días`;
   }
   if (ldLabelEl) {
     ldLabelEl.textContent = "";
-  }
-  if (ldBadgeEl) {
-    ldBadgeEl.textContent = `${metrics.remainingLdDays} d por disfrutar`;
-    ldBadgeEl.className = metrics.remainingLdDays > 0
-      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 shrink-0"
-      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
   }
   if (ldSubEl) {
     ldSubEl.textContent = "";
@@ -1001,7 +983,6 @@ function renderCalendar() {
   balEl.className = monthBal >= 0 ? "font-black font-mono text-emerald-600" : "font-black font-mono text-rose-600";
 
   document.getElementById("cal-month-breakdown").innerHTML = `
-    <span>Desglose de ${MONTH_NAMES[month]}:</span>
     <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 font-mono">${mCount} M</span>
     <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-200 font-mono">${tCount} T</span>
     <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-200 font-mono">${nCount} N</span>
