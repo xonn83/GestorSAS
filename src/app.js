@@ -64,6 +64,8 @@ export const AppState = {
     hoursV: 7.0,
     hoursLD: 7.0,
     hoursDCI: 7.0,
+    annualVacationDays: 22.0,
+    annualLdDays: 6.0,
     proposedDates: ""
   },
   calendarYear: currentYear,
@@ -564,47 +566,102 @@ export function getAccumulatedMetrics() {
   const year = AppState.calendarYear;
   const yearDays = getDaysInYear(year);
   const totalContractReq = getContractRequiredHoursTotal();
+  const contractDays = getContractDaysTotal();
+
+  const hM = parseFloat(AppState.config.hoursM) || 7.0;
+  const hT = parseFloat(AppState.config.hoursT) || 7.0;
+  const hN = parseFloat(AppState.config.hoursN) || 10.0;
+  const hV = parseFloat(AppState.config.hoursV) || 7.0;
+  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
+  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
+
+  // 1. Bolsas Estatutarias de Vacaciones y Asuntos Propios (LD) según Nombramiento
+  // Por defecto en SAS: 22 días laborables de vacaciones y 6 días de LD al año.
+  // Proporcional a días de contrato con redondeo SAS:
+  // - Vacaciones a fracciones de 0,5 al alza (Math.ceil(val * 2) / 2)
+  // - LD proporcionales (para 269 días de 365, da 4.42 -> 5 días según criterio 6 * 9/12 = 4.5 -> 5)
+  const annualBaseVac = parseFloat(AppState.config.annualVacationDays) || 22.0;
+  const annualBaseLd = parseFloat(AppState.config.annualLdDays) || 6.0;
+
+  let totalVacationDays = annualBaseVac;
+  let totalLdDays = annualBaseLd;
+  if (contractDays < yearDays && yearDays > 0) {
+    totalVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
+    totalLdDays = Math.ceil((annualBaseLd * contractDays) / yearDays);
+  }
 
   let totalActiveDaysInYear = 0;
   let totalWorkedAllYear = 0;
+  let totalPresentialHours = 0;
+  let totalPermitHours = 0;
+  let totalDciConsumedHours = 0;
+  let totalVacationConsumedDays = 0;
+  let totalLdConsumedDays = 0;
 
   let filledMonthsCount = 0;
   let lastFilledMonth = -1;
   let workedInFilledMonths = 0;
   let requiredInFilledMonths = 0;
+  let presentialInFilledMonths = 0;
+  let permitsInFilledMonths = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
     totalActiveDaysInYear += actDays;
 
-    const actHours = getMonthActualHours(m);
-    totalWorkedAllYear += actHours;
+    const mCount = row.mananas || 0;
+    const tCount = row.tardes || 0;
+    const nCount = row.noches || 0;
+    const vCount = row.vacaciones || 0;
+    const ldCount = row.moscosos || 0;
+    const dciH = row.dciHoras || 0;
+
+    const presHours = (mCount * hM) + (tCount * hT) + (nCount * hN);
+    const permHours = (vCount * hV) + (ldCount * hLD);
+    const effHours = presHours + permHours - dciH;
+
+    totalWorkedAllYear += effHours;
+    totalPresentialHours += presHours;
+    totalPermitHours += permHours;
+    totalDciConsumedHours += dciH;
+    totalVacationConsumedDays += vCount;
+    totalLdConsumedDays += ldCount;
 
     const hasShifts = (
-      (row.mananas || 0) > 0 ||
-      (row.tardes || 0) > 0 ||
-      (row.noches || 0) > 0 ||
-      (row.vacaciones || 0) > 0 ||
-      (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0)
+      mCount > 0 || tCount > 0 || nCount > 0 ||
+      vCount > 0 || ldCount > 0 || dciH !== 0
     );
 
     if (actDays > 0 && hasShifts) {
       filledMonthsCount++;
       lastFilledMonth = m;
-      workedInFilledMonths += actHours;
+      workedInFilledMonths += effHours;
       requiredInFilledMonths += getMonthRequiredHours(year, m);
+      presentialInFilledMonths += presHours;
+      permitsInFilledMonths += permHours;
     }
   });
 
+  // Saldo General Acumulado en meses rellenados
   let accumulatedBalance = 0.0;
   if (filledMonthsCount > 0) {
     accumulatedBalance = parseFloat((workedInFilledMonths - requiredInFilledMonths).toFixed(1));
   }
 
-  const dciHoursPerDay = parseFloat(AppState.config.hoursDCI) || 7.0;
-  const dciDays = accumulatedBalance > 0 ? Math.floor(accumulatedBalance / dciHoursPerDay) : 0;
-  const dciRemainderHours = accumulatedBalance > 0 ? parseFloat((accumulatedBalance % dciHoursPerDay).toFixed(1)) : 0.0;
+  // Bolsa DCI (Exceso Real):
+  // Horas netas de exceso acumuladas por turnos de presencia física trabajados en días de descanso o dobletes,
+  // menos los días DCI ya consumidos. Conversión directa en días completos libres disponibles (Horas ÷ 7).
+  const dciNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
+  const dciDaysAvailable = Math.floor(dciNetHours / hDCI);
+  const dciRemainderHours = parseFloat((dciNetHours % hDCI).toFixed(1));
+  const dciExactDays = parseFloat((dciNetHours / hDCI).toFixed(1));
+  const totalDciConsumedDays = Math.round(totalDciConsumedHours / hDCI);
+
+  // Bolsa Vacaciones
+  const remainingVacationDays = Math.max(0, parseFloat((totalVacationDays - totalVacationConsumedDays).toFixed(1)));
+
+  // Bolsa Asuntos Propios (LD)
+  const remainingLdDays = Math.max(0, Math.round(totalLdDays - totalLdConsumedDays));
 
   // Progreso real de horas sobre la jornada anual
   const progressPercent = totalContractReq > 0
@@ -612,23 +669,42 @@ export function getAccumulatedMetrics() {
     : 0;
 
   const remainingHoursAnnual = Math.max(0, parseFloat((totalContractReq - totalWorkedAllYear).toFixed(1)));
-  const shiftM = parseFloat(AppState.config.hoursM) || 7.0;
-  const remainingShifts = Math.ceil(remainingHoursAnnual / shiftM);
+  const remainingShifts = Math.ceil(remainingHoursAnnual / hM);
 
   return {
     year,
     yearDays,
+    contractDays,
     totalContractReq,
     totalActiveDaysInYear,
     totalWorkedAllYear,
+    totalPresentialHours,
+    totalPermitHours,
+    totalDciConsumedHours,
+    totalDciConsumedDays,
     filledMonthsCount,
     lastFilledMonth,
     lastFilledMonthName: lastFilledMonth >= 0 ? MONTH_NAMES[lastFilledMonth] : null,
     workedInFilledMonths,
     requiredInFilledMonths,
+    presentialInFilledMonths,
+    permitsInFilledMonths,
     accumulatedBalance,
-    dciDays,
+    // Bolsa DCI (Exceso Real)
+    dciNetHours,
+    dciDaysAvailable,
+    dciDays: dciDaysAvailable, // Alias para compatibilidad con Tab 3 y Tab 4
     dciRemainderHours,
+    dciExactDays,
+    // Bolsa Vacaciones
+    totalVacationDays,
+    totalVacationConsumedDays,
+    remainingVacationDays,
+    // Bolsa LD
+    totalLdDays,
+    totalLdConsumedDays,
+    remainingLdDays,
+    // Progreso
     progressPercent,
     remainingHoursAnnual,
     remainingShifts
@@ -638,69 +714,134 @@ export function getAccumulatedMetrics() {
 function renderKpis() {
   const metrics = getAccumulatedMetrics();
 
+  // -------------------------------------------------------------
+  // TARJETA 1: Saldo Bolsa (General acumulado a meses rellenados)
+  // -------------------------------------------------------------
   const balanceEl = document.getElementById("kpi-balance");
   const balanceLabel = document.getElementById("kpi-balance-label");
   const balanceBadge = document.getElementById("kpi-balance-badge");
   const balanceSub = document.getElementById("kpi-balance-sub");
-  const balanceBar = document.getElementById("kpi-balance-bar");
 
-  const sign = metrics.accumulatedBalance > 0 ? "+" : "";
-  balanceEl.textContent = `${sign}${metrics.accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
+  if (balanceEl) {
+    const sign = metrics.accumulatedBalance > 0 ? "+" : "";
+    balanceEl.textContent = `${sign}${metrics.accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
 
-  if (metrics.filledMonthsCount === 0) {
-    balanceEl.className = "text-xl sm:text-3xl font-black text-slate-700 tracking-tight font-mono block";
-    balanceLabel.textContent = "Sin registros aún";
-    balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
-    balanceBadge.textContent = "Sin datos";
-    balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
-  } else {
-    balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h / ${metrics.requiredInFilledMonths.toFixed(1)}h exig. (a ${metrics.lastFilledMonthName})`;
-
-    if (metrics.accumulatedBalance > 0) {
-      balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
-      balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
-      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0";
-      balanceBadge.textContent = "A Favor";
-    } else if (metrics.accumulatedBalance < 0) {
-      balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
-      balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
-      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 shrink-0";
-      balanceBadge.textContent = "Déficit";
+    if (metrics.filledMonthsCount === 0) {
+      balanceEl.className = "text-xl sm:text-3xl font-black text-slate-700 tracking-tight font-mono block";
+      if (balanceLabel) balanceLabel.textContent = "Sin registros aún";
+      if (balanceBadge) {
+        balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
+        balanceBadge.textContent = "Sin datos";
+      }
+      if (balanceSub) balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
     } else {
-      balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
-      balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
-      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-800 shrink-0";
-      balanceBadge.textContent = "Al día";
+      if (balanceSub) balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h / ${metrics.requiredInFilledMonths.toFixed(1)}h exig. (a ${metrics.lastFilledMonthName})`;
+
+      if (metrics.accumulatedBalance > 0) {
+        balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
+        if (balanceLabel) balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
+        if (balanceBadge) {
+          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0";
+          balanceBadge.textContent = "A Favor";
+        }
+      } else if (metrics.accumulatedBalance < 0) {
+        balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
+        if (balanceLabel) balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
+        if (balanceBadge) {
+          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 shrink-0";
+          balanceBadge.textContent = "Déficit";
+        }
+      } else {
+        balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
+        if (balanceLabel) balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
+        if (balanceBadge) {
+          balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-800 shrink-0";
+          balanceBadge.textContent = "Al día";
+        }
+      }
     }
   }
 
-  // KPI 2: Días DCI (a mes rellenado)
+  // -------------------------------------------------------------
+  // TARJETA 2: Bolsa DCI (Exceso Real)
+  // -------------------------------------------------------------
+  const dciHoursEl = document.getElementById("kpi-dci-hours");
   const dciDaysEl = document.getElementById("kpi-dci-days");
+  const dciLabelEl = document.getElementById("kpi-dci-label");
+  const dciBadgeEl = document.getElementById("kpi-dci-badge");
   const dciSubEl = document.getElementById("kpi-dci-sub");
 
-  if (metrics.accumulatedBalance > 0) {
-    dciDaysEl.textContent = `${metrics.dciDays} Días`;
-    dciSubEl.textContent = `+${metrics.dciRemainderHours}h bolsa (a ${metrics.lastFilledMonthName})`;
-  } else {
-    dciDaysEl.textContent = "0 Días";
-    dciSubEl.textContent = metrics.filledMonthsCount > 0 ? `Sin exceso a ${metrics.lastFilledMonthName}` : "Sin registros";
+  if (dciHoursEl) {
+    const signDci = metrics.dciNetHours > 0 ? "+" : "";
+    dciHoursEl.textContent = `${signDci}${metrics.dciNetHours.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
+  }
+  if (dciDaysEl) {
+    dciDaysEl.textContent = `${metrics.dciDaysAvailable} Días`;
+  }
+  if (dciLabelEl) {
+    if (metrics.dciNetHours > 0) {
+      dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">${metrics.dciDaysAvailable} días libres</span> disponibles (+${metrics.dciRemainderHours}h remanente)`;
+    } else {
+      dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Sin exceso de jornada acumulado" : "0 días libres disponibles (÷ 7h)";
+    }
+  }
+  if (dciBadgeEl) {
+    dciBadgeEl.textContent = metrics.dciNetHours > 0 ? `+${metrics.dciDaysAvailable} d Libres` : "0 d Libres";
+    dciBadgeEl.className = metrics.dciNetHours > 0
+      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0"
+      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
+  }
+  if (dciSubEl) {
+    dciSubEl.textContent = `${metrics.totalDciConsumedDays} d DCI disfrutados en cuadrante (${metrics.totalDciConsumedHours.toFixed(1)}h)`;
   }
 
-  // KPI 3: Cuota Anual y Barra de Progreso de Horas Cumplidas
-  document.getElementById("kpi-required-hours").textContent = `${metrics.totalContractReq.toFixed(1)} h`;
-  document.getElementById("kpi-contract-days").textContent = `${metrics.totalActiveDaysInYear} d (${metrics.year})`;
-  document.getElementById("kpi-required-percent").textContent = `${metrics.progressPercent}%`;
+  // -------------------------------------------------------------
+  // TARJETA 3: Bolsa Vacaciones
+  // -------------------------------------------------------------
+  const vacValueEl = document.getElementById("kpi-vac-value");
+  const vacLabelEl = document.getElementById("kpi-vac-label");
+  const vacBadgeEl = document.getElementById("kpi-vac-badge");
+  const vacSubEl = document.getElementById("kpi-vac-sub");
 
-  if (balanceBar) {
-    balanceBar.style.width = `${metrics.progressPercent}%`;
-    balanceBar.className = metrics.progressPercent >= 100
-      ? "bg-emerald-500 h-full rounded-full transition-all duration-500"
-      : "bg-emerald-600 h-full rounded-full transition-all duration-500";
+  if (vacValueEl) {
+    vacValueEl.textContent = `${metrics.totalVacationConsumedDays} / ${metrics.totalVacationDays} días`;
+  }
+  if (vacLabelEl) {
+    vacLabelEl.textContent = `Restan ${metrics.remainingVacationDays} días por disfrutar`;
+  }
+  if (vacBadgeEl) {
+    vacBadgeEl.textContent = `${metrics.remainingVacationDays} d restan`;
+    vacBadgeEl.className = metrics.remainingVacationDays > 0
+      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0"
+      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
+  }
+  if (vacSubEl) {
+    vacSubEl.textContent = `Devengo: ${metrics.totalVacationDays} d según nombramiento (${metrics.contractDays} d)`;
   }
 
-  // KPI 4: Turnos Restantes para Fin de Contrato
-  document.getElementById("kpi-remaining-shifts").textContent = `${metrics.remainingShifts} turnos`;
-  document.getElementById("kpi-remaining-hours").textContent = `${metrics.remainingHoursAnnual.toFixed(1)} h pend.`;
+  // -------------------------------------------------------------
+  // TARJETA 4: Bolsa Asuntos Propios (LD)
+  // -------------------------------------------------------------
+  const ldValueEl = document.getElementById("kpi-ld-value");
+  const ldLabelEl = document.getElementById("kpi-ld-label");
+  const ldBadgeEl = document.getElementById("kpi-ld-badge");
+  const ldSubEl = document.getElementById("kpi-ld-sub");
+
+  if (ldValueEl) {
+    ldValueEl.textContent = `${metrics.totalLdConsumedDays} / ${metrics.totalLdDays} días`;
+  }
+  if (ldLabelEl) {
+    ldLabelEl.textContent = `Restan ${metrics.remainingLdDays} días por disfrutar`;
+  }
+  if (ldBadgeEl) {
+    ldBadgeEl.textContent = `${metrics.remainingLdDays} d restan`;
+    ldBadgeEl.className = metrics.remainingLdDays > 0
+      ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 shrink-0"
+      : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
+  }
+  if (ldSubEl) {
+    ldSubEl.textContent = `Devengo: ${metrics.totalLdDays} d según nombramiento (${metrics.contractDays} d)`;
+  }
 }
 
 function renderCalendar() {
@@ -909,12 +1050,15 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-amber-50/30">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-emerald-50/30">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-slate-100/40 cell-actual">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
-        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-accum">-</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-accum">-</td>
+        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-dci-net">-</td>
       `;
 
       tr.addEventListener("click", () => {
@@ -937,12 +1081,15 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-bold text-amber-900">${row.mananas || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-orange-900">${row.tardes || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-indigo-900">${row.noches || 0}</td>
+        <td class="py-2.5 px-2 text-center font-mono font-black text-amber-950 bg-amber-50/60 cell-presencial">-</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-emerald-900">${row.vacaciones || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-purple-900">${row.moscosos || 0}</td>
+        <td class="py-2.5 px-2 text-center font-mono font-black text-emerald-950 bg-emerald-50/60 cell-permisos">-</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dciHoras ? (row.dciHoras + 'h') : '0h'}</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-actual">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
-        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-accum">-</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-accum">-</td>
+        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-dci-net font-black">-</td>
       `;
 
       tr.addEventListener("click", () => {
@@ -960,15 +1107,23 @@ function renderTable() {
 
 function updateTableComputedCells() {
   const year = AppState.calendarYear;
+  const hM = parseFloat(AppState.config.hoursM) || 7.0;
+  const hT = parseFloat(AppState.config.hoursT) || 7.0;
+  const hN = parseFloat(AppState.config.hoursN) || 10.0;
+  const hV = parseFloat(AppState.config.hoursV) || 7.0;
+  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
+  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
+
   let totActiveDays = 0;
   let totReqHours = 0;
   let totMananas = 0;
   let totTardes = 0;
   let totNoches = 0;
+  let totPresentialHours = 0;
   let totVacaciones = 0;
   let totMoscosos = 0;
+  let totPermitHours = 0;
   let totDciHoras = 0;
-  let totGuardias = 0;
   let totActualHours = 0;
   let runningAccumBalance = 0;
 
@@ -988,6 +1143,10 @@ function updateTableComputedCells() {
 
       const tr = document.getElementById(`gerhonte-row-${m}`);
       if (tr) {
+        const cellPres = tr.querySelector(".cell-presencial");
+        if (cellPres) cellPres.textContent = "0.0";
+        const cellPerm = tr.querySelector(".cell-permisos");
+        if (cellPerm) cellPerm.textContent = "0.0";
         const cellAct = tr.querySelector(".cell-actual");
         if (cellAct) cellAct.textContent = "0.0";
         const cellBal = tr.querySelector(".cell-balance");
@@ -998,7 +1157,12 @@ function updateTableComputedCells() {
         const cellAcc = tr.querySelector(".cell-accum");
         if (cellAcc) {
           cellAcc.textContent = "-";
-          cellAcc.className = "py-2.5 px-3 text-right font-mono font-black cell-accum text-slate-400";
+          cellAcc.className = "py-2.5 px-2 text-center font-mono font-black cell-accum text-slate-400";
+        }
+        const cellDciNet = tr.querySelector(".cell-dci-net");
+        if (cellDciNet) {
+          cellDciNet.textContent = "-";
+          cellDciNet.className = "py-2.5 px-3 text-right font-mono cell-dci-net text-slate-400";
         }
       }
       return;
@@ -1017,6 +1181,10 @@ function updateTableComputedCells() {
 
     if (!hasShifts) {
       if (tr) {
+        const cellPres = tr.querySelector(".cell-presencial");
+        if (cellPres) cellPres.textContent = "-";
+        const cellPerm = tr.querySelector(".cell-permisos");
+        if (cellPerm) cellPerm.textContent = "-";
         const cellAct = tr.querySelector(".cell-actual");
         if (cellAct) {
           cellAct.textContent = "-";
@@ -1030,13 +1198,21 @@ function updateTableComputedCells() {
         const cellAcc = tr.querySelector(".cell-accum");
         if (cellAcc) {
           cellAcc.textContent = "-";
-          cellAcc.className = "py-2.5 px-3 text-right font-mono text-slate-400 cell-accum";
+          cellAcc.className = "py-2.5 px-2 text-center font-mono text-slate-400 cell-accum";
+        }
+        const cellDciNet = tr.querySelector(".cell-dci-net");
+        if (cellDciNet) {
+          cellDciNet.textContent = "-";
+          cellDciNet.className = "py-2.5 px-3 text-right font-mono cell-dci-net text-slate-400";
         }
       }
       return;
     }
 
-    const actHours = getMonthActualHours(m);
+    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+    const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
+    const dciH = row.dciHoras || 0;
+    const actHours = presHours + permHours - dciH;
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
     totActiveDays += activeDays;
@@ -1044,9 +1220,11 @@ function updateTableComputedCells() {
     totMananas += row.mananas;
     totTardes += row.tardes;
     totNoches += row.noches;
+    totPresentialHours += presHours;
     totVacaciones += row.vacaciones;
     totMoscosos += row.moscosos;
-    totDciHoras += row.dciHoras;
+    totPermitHours += permHours;
+    totDciHoras += dciH;
     totActualHours += actHours;
     runningAccumBalance += monthBal;
 
@@ -1054,10 +1232,22 @@ function updateTableComputedCells() {
       const signMonth = monthBal > 0 ? "+" : "";
       const signAccum = runningAccumBalance > 0 ? "+" : "";
 
+      const cellPres = tr.querySelector(".cell-presencial");
+      if (cellPres) {
+        cellPres.textContent = presHours.toFixed(1);
+        cellPres.className = "py-2.5 px-2 text-center font-mono font-bold text-amber-950 bg-amber-50/70 cell-presencial";
+      }
+
+      const cellPerm = tr.querySelector(".cell-permisos");
+      if (cellPerm) {
+        cellPerm.textContent = permHours.toFixed(1);
+        cellPerm.className = "py-2.5 px-2 text-center font-mono font-bold text-emerald-950 bg-emerald-50/70 cell-permisos";
+      }
+
       const cellAct = tr.querySelector(".cell-actual");
       if (cellAct) {
         cellAct.textContent = actHours.toFixed(1);
-        cellAct.className = "py-2.5 px-2 text-center font-mono font-bold bg-slate-100/70 text-slate-900 cell-actual";
+        cellAct.className = "py-2.5 px-2 text-center font-mono font-black bg-slate-100/70 text-slate-900 cell-actual";
       }
 
       const cellBal = tr.querySelector(".cell-balance");
@@ -1069,30 +1259,50 @@ function updateTableComputedCells() {
       const cellAcc = tr.querySelector(".cell-accum");
       if (cellAcc) {
         cellAcc.textContent = `${signAccum}${runningAccumBalance.toFixed(1)} h`;
-        cellAcc.className = `py-2.5 px-3 text-right font-mono font-black cell-accum ${runningAccumBalance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        cellAcc.className = `py-2.5 px-2 text-center font-mono font-black cell-accum ${runningAccumBalance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+      }
+
+      const cellDciNet = tr.querySelector(".cell-dci-net");
+      if (cellDciNet) {
+        if (runningAccumBalance > 0) {
+          const dciDays = Math.floor(runningAccumBalance / hDCI);
+          cellDciNet.textContent = `+${runningAccumBalance.toFixed(1)} h (${dciDays} d)`;
+          cellDciNet.className = "py-2.5 px-3 text-right font-mono font-black text-cyan-900 bg-cyan-50/60 cell-dci-net";
+        } else {
+          cellDciNet.textContent = "0.0 h (0 d)";
+          cellDciNet.className = "py-2.5 px-3 text-right font-mono font-bold text-slate-400 cell-dci-net";
+        }
       }
     }
   });
 
   const accumSign = runningAccumBalance > 0 ? "+" : "";
+  const finalDciHours = runningAccumBalance > 0 ? runningAccumBalance : 0.0;
+  const finalDciDays = Math.floor(finalDciHours / hDCI);
+
   const tfoot = document.getElementById("gerhonte-table-totals");
   if (tfoot) {
     tfoot.innerHTML = `
       <td class="sticky left-0 bg-slate-100 z-10 py-3 px-3 text-left font-black border-r border-slate-300 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">TOTAL AUDITADO (${year})</td>
-      <td class="py-3 px-2 font-mono">${totActiveDays} d</td>
-      <td class="py-3 px-2 font-mono bg-emerald-100/70 text-emerald-950" title="Cuota exigible acumulada en meses con registros">${totReqHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono font-bold text-amber-900">${totMananas}</td>
-      <td class="py-3 px-2 font-mono font-bold text-orange-900">${totTardes}</td>
-      <td class="py-3 px-2 font-mono font-bold text-indigo-900">${totNoches}</td>
-      <td class="py-3 px-2 font-mono font-bold text-emerald-900">${totVacaciones}</td>
-      <td class="py-3 px-2 font-mono font-bold text-purple-900">${totMoscosos}</td>
-      <td class="py-3 px-2 font-mono font-bold text-cyan-900">${totDciHoras} h</td>
-      <td class="py-3 px-2 font-mono font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
+      <td class="py-3 px-2 font-mono text-center">${totActiveDays} d</td>
+      <td class="py-3 px-2 font-mono text-center bg-emerald-100/70 text-emerald-950 font-bold" title="Cuota exigible acumulada en meses con registros">${totReqHours.toFixed(1)} h</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-amber-900">${totMananas}</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-orange-900">${totTardes}</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-indigo-900">${totNoches}</td>
+      <td class="py-3 px-2 font-mono text-center font-black text-amber-950 bg-amber-100/80">${totPresentialHours.toFixed(1)} h</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-emerald-900">${totVacaciones}</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-purple-900">${totMoscosos}</td>
+      <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">${totPermitHours.toFixed(1)} h</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDciHoras} h</td>
+      <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
+      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
       </td>
-      <td class="py-3 px-3 text-right font-mono font-black text-sm ${runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
+      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
+      </td>
+      <td class="py-3 px-3 text-right font-mono font-black text-xs text-cyan-950 bg-cyan-100">
+        +${finalDciHours.toFixed(1)} h (${finalDciDays} d)
       </td>
     `;
   }
@@ -1529,7 +1739,7 @@ export function exportarPDF() {
 
   const cards = [
     {
-      label: "SALDO BOLSA ACUMULADO",
+      label: "SALDO BOLSA",
       val: balanceVal,
       sub: balanceState,
       sub2: balanceSub,
@@ -1537,28 +1747,28 @@ export function exportarPDF() {
       bg: balanceBg
     },
     {
-      label: "DÍAS DCI DISPONIBLES",
-      val: `${metrics.dciDays} DÍAS`,
-      sub: metrics.accumulatedBalance > 0 ? `+${metrics.dciRemainderHours.toFixed(1)} h en bolsa` : "Sin exceso de jornada",
-      sub2: `Módulo: ${cfg.hoursDCI || 7} h/día`,
+      label: "BOLSA DCI (EXCESO REAL)",
+      val: `${metrics.dciDaysAvailable} DÍAS`,
+      sub: metrics.dciNetHours > 0 ? `+${metrics.dciNetHours.toFixed(1)} h netas (÷ 7h)` : "Sin exceso acumulado",
+      sub2: `${metrics.totalDciConsumedDays} d DCI disfrutados`,
       color: [4, 120, 87],
       bg: [236, 253, 245]
     },
     {
-      label: `JORNADA EXIGIBLE (${year})`,
-      val: `${metrics.totalContractReq.toFixed(1)} h`,
-      sub: `Progreso: ${metrics.progressPercent}% (${metrics.totalWorkedAllYear.toFixed(1)} h)`,
-      sub2: `${metrics.totalActiveDaysInYear} días de contrato`,
+      label: "BOLSA VACACIONES",
+      val: `${metrics.totalVacationConsumedDays} / ${metrics.totalVacationDays} d`,
+      sub: `Restan ${metrics.remainingVacationDays} días por librar`,
+      sub2: `Según nombramiento (${metrics.contractDays} d)`,
       color: [15, 23, 42],
       bg: [248, 250, 252]
     },
     {
-      label: "TURNOS PENDIENTES",
-      val: `${metrics.remainingShifts} turnos`,
-      sub: `${metrics.remainingHoursAnnual.toFixed(1)} h restantes`,
-      sub2: "Para completar nombramiento",
-      color: [71, 85, 105],
-      bg: [248, 250, 252]
+      label: "BOLSA ASUNTOS PROPIOS (LD)",
+      val: `${metrics.totalLdConsumedDays} / ${metrics.totalLdDays} d`,
+      sub: `Restan ${metrics.remainingLdDays} días por librar`,
+      sub2: `Según nombramiento (${metrics.contractDays} d)`,
+      color: [88, 28, 135],
+      bg: [250, 245, 255]
     }
   ];
 
@@ -1589,13 +1799,22 @@ export function exportarPDF() {
   });
 
   // 4. Tabla de Auditoría Mensual Gerhonte (Pestaña 2)
+  const hM = parseFloat(AppState.config.hoursM) || 7.0;
+  const hT = parseFloat(AppState.config.hoursT) || 7.0;
+  const hN = parseFloat(AppState.config.hoursN) || 10.0;
+  const hV = parseFloat(AppState.config.hoursV) || 7.0;
+  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
+  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
+
   let totActiveDays = 0;
   let totReqHours = 0;
   let totMananas = 0;
   let totTardes = 0;
   let totNoches = 0;
+  let totPresentialHours = 0;
   let totVacaciones = 0;
   let totMoscosos = 0;
+  let totPermitHours = 0;
   let totDciHoras = 0;
   let totActualHours = 0;
   let runningAccum = 0;
@@ -1605,7 +1824,7 @@ export function exportarPDF() {
     const reqHours = getMonthRequiredHours(year, m);
 
     if (activeDays === 0) {
-      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "-", "-", "0 h", "0.0 h", "-", "-"];
+      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "0.0 h", "-", "-", "0.0 h", "-", "0.0 h", "-", "-", "-"];
     }
 
     const hasShifts = (
@@ -1622,15 +1841,20 @@ export function exportarPDF() {
         MONTH_NAMES[m],
         `${activeDays} d`,
         `${reqHours.toFixed(1)} h`,
-        "0", "0", "0", "0", "0",
+        "0", "0", "0", "0.0 h",
+        "0", "0", "0.0 h",
         "0 h",
         "0.0 h",
         "Pendiente",
+        "-",
         "-"
       ];
     }
 
-    const actHours = getMonthActualHours(m);
+    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+    const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
+    const dciH = row.dciHoras || 0;
+    const actHours = presHours + permHours - dciH;
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
     totActiveDays += activeDays;
@@ -1638,14 +1862,20 @@ export function exportarPDF() {
     totMananas += (row.mananas || 0);
     totTardes += (row.tardes || 0);
     totNoches += (row.noches || 0);
+    totPresentialHours += presHours;
     totVacaciones += (row.vacaciones || 0);
     totMoscosos += (row.moscosos || 0);
-    totDciHoras += (row.dciHoras || 0);
+    totPermitHours += permHours;
+    totDciHoras += dciH;
     totActualHours += actHours;
     runningAccum += monthBal;
 
     const signMonth = monthBal > 0 ? "+" : "";
     const signAccum = runningAccum > 0 ? "+" : "";
+
+    const dciNetText = runningAccum > 0
+      ? `+${runningAccum.toFixed(1)} h (${Math.floor(runningAccum / hDCI)} d)`
+      : "0.0 h (0 d)";
 
     return [
       MONTH_NAMES[m],
@@ -1654,16 +1884,20 @@ export function exportarPDF() {
       String(row.mananas || 0),
       String(row.tardes || 0),
       String(row.noches || 0),
+      `${presHours.toFixed(1)} h`,
       String(row.vacaciones || 0),
       String(row.moscosos || 0),
-      row.dciHoras ? `${row.dciHoras} h` : "0 h",
+      `${permHours.toFixed(1)} h`,
+      dciH ? `${dciH} h` : "0 h",
       `${actHours.toFixed(1)} h`,
       `${signMonth}${monthBal.toFixed(1)} h`,
-      `${signAccum}${runningAccum.toFixed(1)} h`
+      `${signAccum}${runningAccum.toFixed(1)} h`,
+      dciNetText
     ];
   });
 
   const totalAccumSign = runningAccum > 0 ? "+" : "";
+  const finalPdfDci = runningAccum > 0 ? runningAccum : 0.0;
   const tableFoot = [[
     `TOTAL AUDITADO (${year})`,
     `${totActiveDays} d`,
@@ -1671,25 +1905,28 @@ export function exportarPDF() {
     String(totMananas),
     String(totTardes),
     String(totNoches),
+    `${totPresentialHours.toFixed(1)} h`,
     String(totVacaciones),
     String(totMoscosos),
+    String(totPermitHours.toFixed(1)) + " h",
     `${totDciHoras} h`,
     `${totActualHours.toFixed(1)} h`,
     `${totalAccumSign}${runningAccum.toFixed(1)} h`,
-    `${totalAccumSign}${runningAccum.toFixed(1)} h`
+    `${totalAccumSign}${runningAccum.toFixed(1)} h`,
+    `+${finalPdfDci.toFixed(1)} h (${Math.floor(finalPdfDci / hDCI)} d)`
   ]];
 
   autoTable(doc, {
     startY: 82,
     margin: { left: margin, right: margin },
-    head: [["Mes", "Días", "Cuota (h)", "M", "T", "N", "V", "LD", "DCI", "Efectivas", "Saldo Mes", "Saldo Acum."]],
+    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "LD", "Perm.", "DCI", "Efect.", "Saldo", "Acum.", "DCI Pend."]],
     body: tableBody,
     foot: tableFoot,
     theme: "grid",
     styles: {
       font: "helvetica",
-      fontSize: 7.5,
-      cellPadding: 1.6,
+      fontSize: 6.8,
+      cellPadding: 1.2,
       halign: "center",
       valign: "middle",
       textColor: [30, 41, 59],
@@ -1700,34 +1937,37 @@ export function exportarPDF() {
       fillColor: [15, 23, 42],
       textColor: [255, 255, 255],
       fontStyle: "bold",
-      fontSize: 7.5,
+      fontSize: 6.8,
       halign: "center"
     },
     footStyles: {
       fillColor: [241, 245, 249],
       textColor: [15, 23, 42],
       fontStyle: "bold",
-      fontSize: 7.5,
+      fontSize: 6.8,
       halign: "center"
     },
     columnStyles: {
-      0: { halign: "left", fontStyle: "bold", cellWidth: 26 },
-      1: { cellWidth: 14 },
-      2: { cellWidth: 17 },
-      3: { cellWidth: 11, fontStyle: "bold" },
-      4: { cellWidth: 11, fontStyle: "bold" },
-      5: { cellWidth: 11, fontStyle: "bold" },
-      6: { cellWidth: 11, fontStyle: "bold" },
-      7: { cellWidth: 11, fontStyle: "bold" },
-      8: { cellWidth: 13, fontStyle: "bold" },
-      9: { cellWidth: 18, fontStyle: "bold" },
-      10: { cellWidth: 18, fontStyle: "bold" },
-      11: { cellWidth: 25, fontStyle: "bold", halign: "right" }
+      0: { halign: "left", fontStyle: "bold", cellWidth: 19 },
+      1: { cellWidth: 10 },
+      2: { cellWidth: 13 },
+      3: { cellWidth: 8, fontStyle: "bold" },
+      4: { cellWidth: 8, fontStyle: "bold" },
+      5: { cellWidth: 8, fontStyle: "bold" },
+      6: { cellWidth: 13, fontStyle: "bold" },
+      7: { cellWidth: 8, fontStyle: "bold" },
+      8: { cellWidth: 8, fontStyle: "bold" },
+      9: { cellWidth: 13, fontStyle: "bold" },
+      10: { cellWidth: 10, fontStyle: "bold" },
+      11: { cellWidth: 14, fontStyle: "bold" },
+      12: { cellWidth: 14, fontStyle: "bold" },
+      13: { cellWidth: 15, fontStyle: "bold" },
+      14: { cellWidth: 23, fontStyle: "bold", halign: "right" }
     },
     didParseCell: function(data) {
       if (data.section === "body") {
         const text = data.cell.raw || "";
-        if (data.column.index === 10 || data.column.index === 11) {
+        if (data.column.index === 12 || data.column.index === 13 || data.column.index === 14) {
           if (typeof text === "string" && text.startsWith("+")) {
             data.cell.styles.textColor = [21, 128, 61];
           } else if (typeof text === "string" && text.startsWith("-") && text !== "-") {
@@ -1773,8 +2013,17 @@ export function exportarPDF() {
 
 export function exportarCSV() {
   const year = AppState.calendarYear;
+  const hM = parseFloat(AppState.config.hoursM) || 7.0;
+  const hT = parseFloat(AppState.config.hoursT) || 7.0;
+  const hN = parseFloat(AppState.config.hoursN) || 10.0;
+  const hV = parseFloat(AppState.config.hoursV) || 7.0;
+  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
+  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
+
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Vacaciones;Moscosos (LD);DCI (h);Horas Efectivas;Saldo Mes (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);DCI Netos Pendientes (h);Estado\r\n";
+
+  let runningAccum = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -1789,13 +2038,18 @@ export function exportarCSV() {
     );
 
     if (activeDays === 0) {
-      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0;0;0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
+      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0.0;0;0;0.0;0;0.0;0.0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
     } else if (!hasShifts) {
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0;0;0;0.0;-;Pendiente de rellenar\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;-;Pendiente de rellenar\r\n`;
     } else {
-      const actHours = getMonthActualHours(m);
-      const monthBal = (actHours - reqHours).toFixed(1);
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${row.vacaciones};${row.moscosos};${row.dciHoras};${actHours.toFixed(1)};${monthBal};Auditado\r\n`;
+      const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+      const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
+      const dciH = row.dciHoras || 0;
+      const actHours = presHours + permHours - dciH;
+      const monthBal = parseFloat((actHours - reqHours).toFixed(1));
+      runningAccum += monthBal;
+      const dciNet = runningAccum > 0 ? runningAccum.toFixed(1) : "0.0";
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};${dciNet};Auditado\r\n`;
     }
   });
 

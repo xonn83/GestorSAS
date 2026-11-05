@@ -18,22 +18,29 @@ Herramienta profesional diseñada para profesionales del **Servicio Andaluz de S
      - **[LD] Moscoso (Asuntos Particulares)**: +7,0 horas efectivas.
      - **[DCI] Día de Descanso Compensatorio**: -7,0 horas del exceso acumulado a favor.
 
-2. **Resumen y Auditoría Numérica Mensual (Gerhonte)**:
-   - Tabla comparativa mes a mes de turnos realizados vs. horas exigibles proporcionales.
+2. **Cuatro Tarjetas de Control y Bolsas Estatutarias**:
+   - **Saldo Bolsa**: Balance horario acumulado consolidado a fecha del último mes auditado.
+   - **Bolsa DCI (Exceso Real)**: Horas netas reales acumuladas por turnos presenciales por encima de la base mensual menos los DCI disfrutados, con conversión directa en días completos libres disponibles (Horas ÷ 7).
+   - **Bolsa Vacaciones**: Días de vacaciones consumidos frente al total devengado según nombramiento (ej. 6 / 16,5 días) y días pendientes por librar.
+   - **Bolsa Asuntos Propios (LD)**: Días de moscosos consumidos frente al cupo asignado según nombramiento (ej. 0 / 5 días) y días pendientes por librar.
+
+3. **Resumen y Auditoría Numérica Mensual (Gerhonte)**:
+   - Separación estricta de **Horas Presenciales** (físicas trabajadas) y **Horas de Permisos** (crédito retribuido por Vacaciones/LD a 7h/día).
+   - Columna final dedicada a **DCI Netos Acumulados Pendientes de Disfrutar**, reflejando con exactitud el exceso de jornada real que el centro adeuda al trabajador.
    - Sincronización bidireccional inmediata entre la cuadrícula del calendario y la tabla mensual.
 
-3. **Planificador y Proyector de Exceso a Fin de Nombramiento**:
+4. **Planificador y Proyector de Exceso a Fin de Nombramiento**:
    - Simulación de días DCI para comprobar cómo quedaría la bolsa.
    - Cálculo automático del número de turnos necesarios para cuadrar el saldo a 0h.
 
-4. **Generador de Solicitud Formal DCI**:
+5. **Generador de Solicitud Formal DCI**:
    - Redacción automática de la instancia administrativa oficial dirigida a la Dirección/Jefatura de Personal del SAS, con detalle de fechas propuestas, saldo acumulado y fundamentación legal.
    - Opciones directas para imprimir en formato administrativo oficial o copiar al portapapeles.
 
-5. **Persistencia Dual (Nube + Modo Local Seguro)**:
+6. **Persistencia Dual (Nube + Modo Local Seguro)**:
    - Sincronización en la nube mediante **Firebase Authentication** y **Cloud Firestore** con reglas de seguridad ABAC por usuario.
    - Modo local automático con `localStorage` ante desconexión o uso sin registro.
-   - Exportación de informe oficial de auditoría y cuadrante en formato **PDF** (con membrete SAS, ficha del profesional y nombramiento, recuadros resumen de saldo/DCI y tabla mensual completa Gerhonte).
+   - Exportación de informe oficial de auditoría y cuadrante en formato **PDF** descargable (con membrete SAS, ficha del profesional y nombramiento, las 4 tarjetas resumen de bolsas y la tabla mensual completa Gerhonte de 15 columnas).
 
 ---
 

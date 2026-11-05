@@ -527,11 +527,12 @@
       </details>
 
       <!-- ============================================================== -->
-      <!-- SECCIÓN 2: TARJETAS KPI DE SALDO Y MÉTRICAS GERHONTE (2x2 móvil)-->
+      <!-- ============================================================== -->
+      <!-- SECCIÓN 2: TARJETAS KPI DE SALDO Y BOLSAS ESTATUTARIAS SAS     -->
       <!-- ============================================================== -->
       <section class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-print">
         
-        <!-- KPI 1: Saldo Acumulado Total -->
+        <!-- KPI 1: Saldo Bolsa (General acumulado) -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Saldo Bolsa</span>
@@ -548,60 +549,54 @@
           </div>
         </div>
 
-        <!-- KPI 2: Días Libres Generados (DCI) -->
+        <!-- KPI 2: Bolsa DCI (Exceso Real) -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
-            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Días DCI</span>
-            <span class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0">
-              Descanso
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa DCI (Exceso Real)</span>
+            <span id="kpi-dci-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0">
+              0 d Libres
             </span>
           </div>
           <div class="my-0.5">
-            <span id="kpi-dci-days" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 Días</span>
-            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Jornadas 7h</p>
+            <span id="kpi-dci-hours" class="text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block">+0,0 h</span>
+            <p id="kpi-dci-label" class="text-[10px] sm:text-xs font-semibold text-slate-600 mt-0.5 truncate"><span id="kpi-dci-days">0 Días</span> libres disponibles (÷ 7h)</p>
           </div>
           <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
-            <span id="kpi-dci-sub" class="truncate font-mono">+0,0h bolsa</span>
+            <span id="kpi-dci-sub" class="truncate font-mono">0 d disfrutados en cuadrante</span>
           </div>
         </div>
 
-        <!-- KPI 3: Jornada Neta Exigible Proporcional -->
+        <!-- KPI 3: Bolsa Vacaciones -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
-            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Jornada Exigible</span>
-            <span id="kpi-contract-days" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-700 shrink-0 truncate max-w-[85px] sm:max-w-none">
-              0 d
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa Vacaciones</span>
+            <span id="kpi-vac-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0">
+              0 d restan
             </span>
           </div>
           <div class="my-0.5">
-            <span id="kpi-required-hours" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0.0 h</span>
-            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Cuota proporcional</p>
+            <span id="kpi-vac-value" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 / 0 días</span>
+            <p id="kpi-vac-label" class="text-[10px] sm:text-xs font-semibold text-slate-600 mt-0.5 truncate">Restan 0 días por disfrutar</p>
           </div>
-          <div class="pt-2 border-t border-slate-100">
-            <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mb-1">
-              <span>Progreso de Jornada</span>
-              <span id="kpi-required-percent" class="font-bold text-slate-800 font-mono">0%</span>
-            </div>
-            <div class="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-              <div id="kpi-balance-bar" class="bg-emerald-600 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
-            </div>
+          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
+            <span id="kpi-vac-sub" class="truncate font-mono">Según contrato activo</span>
           </div>
         </div>
 
-        <!-- KPI 4: Turnos Restantes para Fin de Año -->
+        <!-- KPI 4: Bolsa Asuntos Propios (LD) -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
-            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Pendiente 0h</span>
-            <span class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-100 text-amber-800 shrink-0">
-              Meta 0h
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa Asuntos Propios (LD)</span>
+            <span id="kpi-ld-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 shrink-0">
+              0 d restan
             </span>
           </div>
           <div class="my-0.5">
-            <span id="kpi-remaining-shifts" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 turnos</span>
-            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Para cuadrar</p>
+            <span id="kpi-ld-value" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 / 0 días</span>
+            <p id="kpi-ld-label" class="text-[10px] sm:text-xs font-semibold text-slate-600 mt-0.5 truncate">Restan 0 días por disfrutar</p>
           </div>
           <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
-            <span id="kpi-remaining-hours" class="truncate font-mono">0.0 h pend.</span>
+            <span id="kpi-ld-sub" class="truncate font-mono">Según contrato activo</span>
           </div>
         </div>
 
@@ -762,12 +757,15 @@
                   <th class="py-2.5 px-2 text-center text-amber-800">M (7h)</th>
                   <th class="py-2.5 px-2 text-center text-orange-800">T (7h)</th>
                   <th class="py-2.5 px-2 text-center text-indigo-800">N (10h)</th>
+                  <th class="py-2.5 px-2 text-center text-amber-950 bg-amber-50/80 font-black">H. Presencial</th>
                   <th class="py-2.5 px-2 text-center text-emerald-800">Vac (7h)</th>
                   <th class="py-2.5 px-2 text-center text-purple-800">LD (7h)</th>
+                  <th class="py-2.5 px-2 text-center text-emerald-950 bg-emerald-50/80 font-black">H. Permisos</th>
                   <th class="py-2.5 px-2 text-center text-cyan-800">DCI Disfr.</th>
-                  <th class="py-2.5 px-2 text-center bg-slate-200/60 text-slate-900">Horas Cumplidas</th>
+                  <th class="py-2.5 px-2 text-center bg-slate-200/60 text-slate-900 font-black">Horas Efectivas</th>
                   <th class="py-2.5 px-2 text-center">Saldo Mes</th>
-                  <th class="py-2.5 px-3 text-right font-black">Saldo Acumulado</th>
+                  <th class="py-2.5 px-2 text-center font-bold">Saldo Acum.</th>
+                  <th class="py-2.5 px-3 text-right font-black text-cyan-950 bg-cyan-50/90">DCI Netos Pend.</th>
                 </tr>
               </thead>
               <tbody id="gerhonte-table-body" class="divide-y divide-slate-100">
