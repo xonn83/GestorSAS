@@ -828,13 +828,13 @@ function renderKpis() {
   const vacSubEl = document.getElementById("kpi-vac-sub");
 
   if (vacValueEl) {
-    vacValueEl.textContent = `${metrics.totalVacationConsumedDays} / ${metrics.totalVacationDays} días`;
+    vacValueEl.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días`;
   }
   if (vacLabelEl) {
-    vacLabelEl.textContent = `Restan ${metrics.remainingVacationDays} días por disfrutar`;
+    vacLabelEl.textContent = "";
   }
   if (vacBadgeEl) {
-    vacBadgeEl.textContent = `${metrics.remainingVacationDays} d restan`;
+    vacBadgeEl.textContent = `${metrics.remainingVacationDays} d por disfrutar`;
     vacBadgeEl.className = metrics.remainingVacationDays > 0
       ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0"
       : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
@@ -844,7 +844,7 @@ function renderKpis() {
   }
 
   // -------------------------------------------------------------
-  // TARJETA 4: Bolsa Asuntos Propios (LD)
+  // TARJETA 4: Moscosos (Asuntos Propios / LD)
   // -------------------------------------------------------------
   const ldValueEl = document.getElementById("kpi-ld-value");
   const ldLabelEl = document.getElementById("kpi-ld-label");
@@ -852,13 +852,13 @@ function renderKpis() {
   const ldSubEl = document.getElementById("kpi-ld-sub");
 
   if (ldValueEl) {
-    ldValueEl.textContent = `${metrics.totalLdConsumedDays} / ${metrics.totalLdDays} días`;
+    ldValueEl.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días`;
   }
   if (ldLabelEl) {
-    ldLabelEl.textContent = `Restan ${metrics.remainingLdDays} días por disfrutar`;
+    ldLabelEl.textContent = "";
   }
   if (ldBadgeEl) {
-    ldBadgeEl.textContent = `${metrics.remainingLdDays} d restan`;
+    ldBadgeEl.textContent = `${metrics.remainingLdDays} d por disfrutar`;
     ldBadgeEl.className = metrics.remainingLdDays > 0
       ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-purple-100 text-purple-800 shrink-0"
       : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
@@ -1788,16 +1788,16 @@ export function exportarPDF() {
     },
     {
       label: "BOLSA VACACIONES",
-      val: `${metrics.totalVacationConsumedDays} / ${metrics.totalVacationDays} d`,
-      sub: `Restan ${metrics.remainingVacationDays} días por librar`,
+      val: `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} d`,
+      sub: "Días por disfrutar / Acumulados",
       sub2: metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)",
       color: [15, 23, 42],
       bg: [248, 250, 252]
     },
     {
-      label: "BOLSA ASUNTOS PROPIOS (LD)",
-      val: `${metrics.totalLdConsumedDays} / ${metrics.totalLdDays} d`,
-      sub: `Restan ${metrics.remainingLdDays} días por librar`,
+      label: "MOSCOSOS",
+      val: `${metrics.remainingLdDays} / ${metrics.totalLdDays} d`,
+      sub: "Días por disfrutar / Acumulados",
       sub2: "",
       color: [88, 28, 135],
       bg: [250, 245, 255]
