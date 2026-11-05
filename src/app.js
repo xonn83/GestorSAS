@@ -558,24 +558,83 @@ export function updateAll(skipTableRebuild = false) {
   triggerSave();
 }
 
-function renderKpis() {
+export function getAccumulatedMetrics() {
   const year = AppState.calendarYear;
   const yearDays = getDaysInYear(year);
+  const totalContractReq = getContractRequiredHoursTotal();
 
-  let totalWorked = 0;
-  let totalRequiredToActive = 0;
   let totalActiveDaysInYear = 0;
+  let totalWorkedAllYear = 0;
+
+  let filledMonthsCount = 0;
+  let lastFilledMonth = -1;
+  let workedInFilledMonths = 0;
+  let requiredInFilledMonths = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
     totalActiveDaysInYear += actDays;
-    const req = getMonthRequiredHours(year, m);
-    const act = getMonthActualHours(m);
-    totalWorked += act;
-    totalRequiredToActive += req;
+
+    const actHours = getMonthActualHours(m);
+    totalWorkedAllYear += actHours;
+
+    const hasShifts = (
+      (row.mananas || 0) > 0 ||
+      (row.tardes || 0) > 0 ||
+      (row.noches || 0) > 0 ||
+      (row.vacaciones || 0) > 0 ||
+      (row.moscosos || 0) > 0 ||
+      ((row.dciHoras || 0) !== 0)
+    );
+
+    if (actDays > 0 && hasShifts) {
+      filledMonthsCount++;
+      lastFilledMonth = m;
+      workedInFilledMonths += actHours;
+      requiredInFilledMonths += getMonthRequiredHours(year, m);
+    }
   });
 
-  const accumulatedBalance = parseFloat((totalWorked - totalRequiredToActive).toFixed(1));
+  let accumulatedBalance = 0.0;
+  if (filledMonthsCount > 0) {
+    accumulatedBalance = parseFloat((workedInFilledMonths - requiredInFilledMonths).toFixed(1));
+  }
+
+  const dciHoursPerDay = parseFloat(AppState.config.hoursDCI) || 7.0;
+  const dciDays = accumulatedBalance > 0 ? Math.floor(accumulatedBalance / dciHoursPerDay) : 0;
+  const dciRemainderHours = accumulatedBalance > 0 ? parseFloat((accumulatedBalance % dciHoursPerDay).toFixed(1)) : 0.0;
+
+  // Progreso real de horas sobre la jornada anual
+  const progressPercent = totalContractReq > 0
+    ? Math.min(100, Math.round((totalWorkedAllYear / totalContractReq) * 100))
+    : 0;
+
+  const remainingHoursAnnual = Math.max(0, parseFloat((totalContractReq - totalWorkedAllYear).toFixed(1)));
+  const shiftM = parseFloat(AppState.config.hoursM) || 7.0;
+  const remainingShifts = Math.ceil(remainingHoursAnnual / shiftM);
+
+  return {
+    year,
+    yearDays,
+    totalContractReq,
+    totalActiveDaysInYear,
+    totalWorkedAllYear,
+    filledMonthsCount,
+    lastFilledMonth,
+    lastFilledMonthName: lastFilledMonth >= 0 ? MONTH_NAMES[lastFilledMonth] : null,
+    workedInFilledMonths,
+    requiredInFilledMonths,
+    accumulatedBalance,
+    dciDays,
+    dciRemainderHours,
+    progressPercent,
+    remainingHoursAnnual,
+    remainingShifts
+  };
+}
+
+function renderKpis() {
+  const metrics = getAccumulatedMetrics();
 
   const balanceEl = document.getElementById("kpi-balance");
   const balanceLabel = document.getElementById("kpi-balance-label");
@@ -583,54 +642,63 @@ function renderKpis() {
   const balanceSub = document.getElementById("kpi-balance-sub");
   const balanceBar = document.getElementById("kpi-balance-bar");
 
-  const sign = accumulatedBalance > 0 ? "+" : "";
-  balanceEl.textContent = `${sign}${accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
-  balanceSub.textContent = `${totalWorked.toFixed(1)}h / ${totalRequiredToActive.toFixed(1)}h exig.`;
+  const sign = metrics.accumulatedBalance > 0 ? "+" : "";
+  balanceEl.textContent = `${sign}${metrics.accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
 
-  if (accumulatedBalance > 0) {
-    balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
-    balanceLabel.textContent = "Exceso acumulado";
-    balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0";
-    balanceBadge.textContent = "A Favor";
-    if (balanceBar) balanceBar.className = "bg-emerald-500 h-full rounded-full transition-all duration-300";
-  } else if (accumulatedBalance < 0) {
-    balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
-    balanceLabel.textContent = "Déficit acumulado";
-    balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 shrink-0";
-    balanceBadge.textContent = "Déficit";
-    if (balanceBar) balanceBar.className = "bg-rose-500 h-full rounded-full transition-all duration-300";
+  if (metrics.filledMonthsCount === 0) {
+    balanceEl.className = "text-xl sm:text-3xl font-black text-slate-700 tracking-tight font-mono block";
+    balanceLabel.textContent = "Sin registros aún";
+    balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
+    balanceBadge.textContent = "Sin datos";
+    balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
   } else {
-    balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
-    balanceLabel.textContent = "Al día";
-    balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-800 shrink-0";
-    balanceBadge.textContent = "Al día";
-    if (balanceBar) balanceBar.className = "bg-slate-400 h-full rounded-full transition-all duration-300";
+    balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h / ${metrics.requiredInFilledMonths.toFixed(1)}h exig. (a ${metrics.lastFilledMonthName})`;
+
+    if (metrics.accumulatedBalance > 0) {
+      balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
+      balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
+      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0";
+      balanceBadge.textContent = "A Favor";
+    } else if (metrics.accumulatedBalance < 0) {
+      balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
+      balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
+      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-rose-100 text-rose-800 shrink-0";
+      balanceBadge.textContent = "Déficit";
+    } else {
+      balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
+      balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
+      balanceBadge.className = "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-800 shrink-0";
+      balanceBadge.textContent = "Al día";
+    }
   }
 
-  const dciHoursPerDay = parseFloat(AppState.config.hoursDCI) || 7.0;
+  // KPI 2: Días DCI (a mes rellenado)
   const dciDaysEl = document.getElementById("kpi-dci-days");
   const dciSubEl = document.getElementById("kpi-dci-sub");
 
-  if (accumulatedBalance > 0) {
-    const fullDciDays = Math.floor(accumulatedBalance / dciHoursPerDay);
-    const remainderHours = parseFloat((accumulatedBalance % dciHoursPerDay).toFixed(1));
-    dciDaysEl.textContent = `${fullDciDays} Días`;
-    dciSubEl.textContent = `+${remainderHours}h bolsa`;
+  if (metrics.accumulatedBalance > 0) {
+    dciDaysEl.textContent = `${metrics.dciDays} Días`;
+    dciSubEl.textContent = `+${metrics.dciRemainderHours}h bolsa (a ${metrics.lastFilledMonthName})`;
   } else {
     dciDaysEl.textContent = "0 Días";
-    dciSubEl.textContent = "Sin exceso";
+    dciSubEl.textContent = metrics.filledMonthsCount > 0 ? `Sin exceso a ${metrics.lastFilledMonthName}` : "Sin registros";
   }
 
-  document.getElementById("kpi-required-hours").textContent = `${totalRequiredToActive.toFixed(1)} h`;
-  document.getElementById("kpi-contract-days").textContent = `${totalActiveDaysInYear} d (${year})`;
-  const percentYear = Math.min(100, Math.round((totalActiveDaysInYear / yearDays) * 100));
-  document.getElementById("kpi-required-percent").textContent = `${percentYear}%`;
+  // KPI 3: Cuota Anual y Barra de Progreso de Horas Cumplidas
+  document.getElementById("kpi-required-hours").textContent = `${metrics.totalContractReq.toFixed(1)} h`;
+  document.getElementById("kpi-contract-days").textContent = `${metrics.totalActiveDaysInYear} d (${metrics.year})`;
+  document.getElementById("kpi-required-percent").textContent = `${metrics.progressPercent}%`;
 
-  const remainingHours = Math.max(0, parseFloat((totalRequiredToActive - totalWorked).toFixed(1)));
-  const shiftDuration = parseFloat(AppState.config.hoursM) || 7.0;
-  const remainingShifts = Math.ceil(remainingHours / shiftDuration);
-  document.getElementById("kpi-remaining-shifts").textContent = `${remainingShifts} turnos`;
-  document.getElementById("kpi-remaining-hours").textContent = `${remainingHours.toFixed(1)} h pend.`;
+  if (balanceBar) {
+    balanceBar.style.width = `${metrics.progressPercent}%`;
+    balanceBar.className = metrics.progressPercent >= 100
+      ? "bg-emerald-500 h-full rounded-full transition-all duration-500"
+      : "bg-emerald-600 h-full rounded-full transition-all duration-500";
+  }
+
+  // KPI 4: Turnos Restantes para Fin de Contrato
+  document.getElementById("kpi-remaining-shifts").textContent = `${metrics.remainingShifts} turnos`;
+  document.getElementById("kpi-remaining-hours").textContent = `${metrics.remainingHoursAnnual.toFixed(1)} h pend.`;
 }
 
 function renderCalendar() {
@@ -870,9 +938,9 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-bold text-emerald-900">${row.vacaciones || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-purple-900">${row.moscosos || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dciHoras ? (row.dciHoras + 'h') : '0h'}</td>
-        <td class="py-2.5 px-2 text-center font-mono font-bold bg-slate-100/70 text-slate-900 cell-actual">0.0</td>
-        <td class="py-2.5 px-2 text-center font-mono font-bold cell-balance">0.0</td>
-        <td class="py-2.5 px-3 text-right font-mono font-black cell-accum">0.0 h</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-actual">-</td>
+        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
+        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-accum">-</td>
       `;
 
       tr.addEventListener("click", () => {
@@ -934,6 +1002,38 @@ function updateTableComputedCells() {
       return;
     }
 
+    const hasShifts = (
+      (row.mananas || 0) > 0 ||
+      (row.tardes || 0) > 0 ||
+      (row.noches || 0) > 0 ||
+      (row.vacaciones || 0) > 0 ||
+      (row.moscosos || 0) > 0 ||
+      ((row.dciHoras || 0) !== 0)
+    );
+
+    const tr = document.getElementById(`gerhonte-row-${m}`);
+
+    if (!hasShifts) {
+      if (tr) {
+        const cellAct = tr.querySelector(".cell-actual");
+        if (cellAct) {
+          cellAct.textContent = "-";
+          cellAct.className = "py-2.5 px-2 text-center font-mono text-slate-400 cell-actual";
+        }
+        const cellBal = tr.querySelector(".cell-balance");
+        if (cellBal) {
+          cellBal.textContent = "Pendiente";
+          cellBal.className = "py-2.5 px-2 text-center font-mono text-[11px] font-semibold text-slate-400 cell-balance";
+        }
+        const cellAcc = tr.querySelector(".cell-accum");
+        if (cellAcc) {
+          cellAcc.textContent = "-";
+          cellAcc.className = "py-2.5 px-3 text-right font-mono text-slate-400 cell-accum";
+        }
+      }
+      return;
+    }
+
     const actHours = getMonthActualHours(m);
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
@@ -945,17 +1045,18 @@ function updateTableComputedCells() {
     totVacaciones += row.vacaciones;
     totMoscosos += row.moscosos;
     totDciHoras += row.dciHoras;
-    totGuardias += row.guardias;
     totActualHours += actHours;
     runningAccumBalance += monthBal;
 
-    const tr = document.getElementById(`gerhonte-row-${m}`);
     if (tr) {
       const signMonth = monthBal > 0 ? "+" : "";
       const signAccum = runningAccumBalance > 0 ? "+" : "";
 
       const cellAct = tr.querySelector(".cell-actual");
-      if (cellAct) cellAct.textContent = actHours.toFixed(1);
+      if (cellAct) {
+        cellAct.textContent = actHours.toFixed(1);
+        cellAct.className = "py-2.5 px-2 text-center font-mono font-bold bg-slate-100/70 text-slate-900 cell-actual";
+      }
 
       const cellBal = tr.querySelector(".cell-balance");
       if (cellBal) {
@@ -971,14 +1072,13 @@ function updateTableComputedCells() {
     }
   });
 
-  const finalSign = (totActualHours - totReqHours) > 0 ? "+" : "";
   const accumSign = runningAccumBalance > 0 ? "+" : "";
   const tfoot = document.getElementById("gerhonte-table-totals");
   if (tfoot) {
     tfoot.innerHTML = `
-      <td class="sticky left-0 bg-slate-100 z-10 py-3 px-3 text-left font-black border-r border-slate-300 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">TOTAL ANUAL (${year})</td>
+      <td class="sticky left-0 bg-slate-100 z-10 py-3 px-3 text-left font-black border-r border-slate-300 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">TOTAL AUDITADO (${year})</td>
       <td class="py-3 px-2 font-mono">${totActiveDays} d</td>
-      <td class="py-3 px-2 font-mono bg-emerald-100/70 text-emerald-950">${totReqHours.toFixed(1)} h</td>
+      <td class="py-3 px-2 font-mono bg-emerald-100/70 text-emerald-950" title="Cuota exigible acumulada en meses con registros">${totReqHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono font-bold text-amber-900">${totMananas}</td>
       <td class="py-3 px-2 font-mono font-bold text-orange-900">${totTardes}</td>
       <td class="py-3 px-2 font-mono font-bold text-indigo-900">${totNoches}</td>
@@ -986,8 +1086,8 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono font-bold text-purple-900">${totMoscosos}</td>
       <td class="py-3 px-2 font-mono font-bold text-cyan-900">${totDciHoras} h</td>
       <td class="py-3 px-2 font-mono font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono font-black ${ (totActualHours - totReqHours) >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
-        ${finalSign}${(totActualHours - totReqHours).toFixed(1)} h
+      <td class="py-3 px-2 font-mono font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
+        ${accumSign}${runningAccumBalance.toFixed(1)} h
       </td>
       <td class="py-3 px-3 text-right font-mono font-black text-sm ${runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
@@ -997,18 +1097,10 @@ function updateTableComputedCells() {
 }
 
 function renderProjection() {
-  const year = AppState.calendarYear;
-  const requiredHoursTotal = getContractRequiredHoursTotal();
-  let totalWorked = 0;
-  let totalRequiredToDate = 0;
-
-  AppState.monthlyTableData.forEach((row, m) => {
-    totalWorked += getMonthActualHours(m);
-    totalRequiredToDate += getMonthRequiredHours(year, m);
-  });
-
-  const currentBalance = parseFloat((totalWorked - totalRequiredToDate).toFixed(1));
-  const remainingHoursTotal = Math.max(0, parseFloat((requiredHoursTotal - totalWorked).toFixed(1)));
+  const metrics = getAccumulatedMetrics();
+  const year = metrics.year;
+  const currentBalance = metrics.accumulatedBalance;
+  const remainingHoursTotal = metrics.remainingHoursAnnual;
   const shiftDuration = parseFloat(AppState.config.hoursM) || 7.0;
 
   const tag = document.getElementById("proj-status-tag");
@@ -1017,23 +1109,28 @@ function renderProjection() {
   const dciAvail = document.getElementById("proj-dci-available");
   const dciHours = parseFloat(AppState.config.hoursDCI) || 7.0;
 
-  const maxDciPossible = currentBalance > 0 ? Math.floor(currentBalance / dciHours) : 0;
+  const maxDciPossible = metrics.dciDays;
   dciAvail.textContent = `${maxDciPossible} DCI`;
 
-  if (currentBalance >= 7) {
+  if (metrics.filledMonthsCount === 0) {
+    tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-600 text-white";
+    tag.textContent = "Sin Registros";
+    headline.textContent = "Aún no hay turnos registrados en este año";
+    desc.textContent = "Rellena los turnos trabajados en el Calendario o en el Resumen para calcular tu bolsa y proyección.";
+  } else if (currentBalance >= 7) {
     tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-emerald-600 text-white";
     tag.textContent = "Superávit Acumulado";
-    headline.textContent = `Tienes ${currentBalance} horas a favor (equivalente a ${maxDciPossible} días DCI)`;
+    headline.textContent = `Tienes ${currentBalance} horas a favor hasta ${metrics.lastFilledMonthName} (equivalente a ${maxDciPossible} días DCI)`;
     desc.textContent = "¡Atención! Solicita formalmente librar estos descansos antes de tu cese para no perderlos.";
   } else if (currentBalance < -7) {
     tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-rose-600 text-white";
     tag.textContent = "Déficit Horario";
-    headline.textContent = `Llevas un retraso de ${Math.abs(currentBalance)} horas respecto a la cuota exigible`;
+    headline.textContent = `Llevas un desfase de ${Math.abs(currentBalance)} horas respecto a la cuota exigible a ${metrics.lastFilledMonthName}`;
     desc.textContent = "Planifica turnos complementarios en los meses restantes para evitar deducciones.";
   } else {
     tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-700 text-white";
     tag.textContent = "Jornada Equilibrada";
-    headline.textContent = "Tu saldo de horas está prácticamente a cero con respecto a la cuota";
+    headline.textContent = `Tu saldo de horas está prácticamente a cero a ${metrics.lastFilledMonthName}`;
     desc.textContent = "Mantén la asignación ordinaria de turnos mes a mes para concluir el año al 100%.";
   }
 
@@ -1047,7 +1144,17 @@ function renderProjection() {
   for (let m = 0; m <= endMonth; m++) {
     const act = getMonthActualHours(m);
     const req = getMonthRequiredHours(year, m);
-    if (act === 0 && req > 0) {
+    const row = AppState.monthlyTableData[m];
+    const hasShifts = row && (
+      (row.mananas || 0) > 0 ||
+      (row.tardes || 0) > 0 ||
+      (row.noches || 0) > 0 ||
+      (row.vacaciones || 0) > 0 ||
+      (row.moscosos || 0) > 0 ||
+      ((row.dciHoras || 0) !== 0)
+    );
+
+    if (!hasShifts && req > 0) {
       pendingMonthsCount++;
       pendingRequiredSum += req;
       const recShifts = Math.ceil(req / shiftDuration);
@@ -1086,19 +1193,12 @@ function renderProjection() {
 }
 
 function renderRequestLetter() {
-  const year = AppState.calendarYear;
-  let totalWorked = 0;
-  let totalRequired = 0;
-
-  AppState.monthlyTableData.forEach((row, m) => {
-    totalWorked += getMonthActualHours(m);
-    totalRequired += getMonthRequiredHours(year, m);
-  });
-
-  const accumulatedBalance = parseFloat((totalWorked - totalRequired).toFixed(1));
+  const metrics = getAccumulatedMetrics();
+  const accumulatedBalance = metrics.accumulatedBalance;
   const dciHours = parseFloat(AppState.config.hoursDCI) || 7.0;
-  const dciDays = accumulatedBalance > 0 ? Math.floor(accumulatedBalance / dciHours) : 0;
-  const remainderHours = accumulatedBalance > 0 ? parseFloat((accumulatedBalance % dciHours).toFixed(1)) : 0;
+  const dciDays = metrics.dciDays;
+  const remainderHours = metrics.dciRemainderHours;
+  const auditedNote = metrics.lastFilledMonthName ? ` (auditado a fecha de ${metrics.lastFilledMonthName})` : "";
 
   const workerName = AppState.config.workerName;
   const workerDni = AppState.config.dni;
@@ -1125,7 +1225,7 @@ EXPONE:
 
 PRIMERO.- Que de conformidad con el Acuerdo de la Mesa Sectorial de Sanidad del Servicio Andaluz de Salud sobre jornada laboral y cuadrantes de turnos (sistema Gerhonte), así como la normativa estatutaria de aplicación, mi jornada neta anual proporcional asciende a la fecha a un cómputo auditado de cumplimiento superior a la cuota exigible.
 
-SEGUNDO.- Que según la auditoría de cuadrante y registro de turnos efectivamente realizados hasta la fecha, se acredita un SALDO A FAVOR acumulado de ${accumulatedBalance > 0 ? '+' : ''}${accumulatedBalance.toFixed(1)} HORAS netas de trabajo efectivo por encima de la jornada debida.
+SEGUNDO.- Que según la auditoría de cuadrante y registro de turnos efectivamente realizados hasta la fecha${auditedNote}, se acredita un SALDO A FAVOR acumulado de ${accumulatedBalance > 0 ? '+' : ''}${accumulatedBalance.toFixed(1)} HORAS netas de trabajo efectivo por encima de la jornada debida.
 
 TERCERO.- Que dicho exceso horario equivale exactamente a ${dciDays} JORNADA(S) COMPLETA(S) de descanso reglamentario (calculado a razón de ${dciHours.toFixed(1)} horas ordinarias por turno), restando un remanente en bolsa de ${remainderHours.toFixed(1)} horas.
 
@@ -1304,12 +1404,23 @@ export function exportarCSV() {
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
     const reqHours = getMonthRequiredHours(year, m);
+    const hasShifts = (
+      (row.mananas || 0) > 0 ||
+      (row.tardes || 0) > 0 ||
+      (row.noches || 0) > 0 ||
+      (row.vacaciones || 0) > 0 ||
+      (row.moscosos || 0) > 0 ||
+      ((row.dciHoras || 0) !== 0)
+    );
+
     if (activeDays === 0) {
       csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0;0;0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
+    } else if (!hasShifts) {
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0;0;0;0.0;-;Pendiente de rellenar\r\n`;
     } else {
       const actHours = getMonthActualHours(m);
       const monthBal = (actHours - reqHours).toFixed(1);
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${row.vacaciones};${row.moscosos};${row.dciHoras};${actHours.toFixed(1)};${monthBal};Activo\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${row.vacaciones};${row.moscosos};${row.dciHoras};${actHours.toFixed(1)};${monthBal};Auditado\r\n`;
     }
   });
 
