@@ -1495,13 +1495,17 @@ document.addEventListener("DOMContentLoaded", () => {
         let friendly = "Error de acceso: ";
         const savedAcc = getLocalAccount(email);
 
-        if (err.code === "auth/operation-not-allowed") {
+        if (err.code === "auth/operation-not-allowed" || err.code === "auth/unauthorized-domain") {
           if (savedAcc && savedAcc.password === password) {
             activateUserSession(savedAcc);
             showToast("¡Sesión iniciada correctamente!", "success");
             return;
           }
-          friendly = `Para acceder con Firebase, habilita 'Correo/Contraseña' en la consola del proyecto ${firebaseConfig.projectId}. O regístrate de nuevo abajo.`;
+          if (err.code === "auth/unauthorized-domain") {
+            friendly = `Dominio '${window.location.hostname}' no autorizado en Firebase. Añádelo en Firebase Console > Authentication > Settings > Authorized Domains, o regístrate abajo.`;
+          } else {
+            friendly = `Para acceder con Firebase, habilita 'Correo/Contraseña' en la consola del proyecto ${firebaseConfig.projectId}. O regístrate de nuevo abajo.`;
+          }
         } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
           if (savedAcc && savedAcc.password === password) {
             activateUserSession(savedAcc);
@@ -1613,8 +1617,7 @@ document.addEventListener("DOMContentLoaded", () => {
         console.error("Register Error:", err);
         let friendly = "Error de registro: ";
 
-        if (err.code === "auth/operation-not-allowed") {
-          // El proveedor de Correo/Contraseña en Firebase está desactivado por defecto en la consola de Firebase
+        if (err.code === "auth/operation-not-allowed" || err.code === "auth/unauthorized-domain") {
           const localUid = "usr_" + Math.random().toString(36).substring(2, 10);
           const accountData = {
             uid: localUid,
@@ -1632,19 +1635,30 @@ document.addEventListener("DOMContentLoaded", () => {
           };
           saveLocalAccount(accountData);
 
+          const isUnauth = err.code === "auth/unauthorized-domain";
+          const title = isUnauth 
+            ? `Dominio '${window.location.hostname}' pendiente de autorizar en Firebase`
+            : "Método 'Correo/Contraseña' pendiente en Firebase";
+          const desc = isUnauth
+            ? `Para sincronizar en la nube desde este dominio (${window.location.hostname}), agrégalo en Firebase Console > Authentication > Settings > Authorized Domains. Puedes acceder y usar la app inmediatamente en este dispositivo.`
+            : `El proyecto de Firebase <strong>${firebaseConfig.projectId}</strong> requiere activar por única vez el método de inicio de sesión en su consola.`;
+          const actionLink = isUnauth
+            ? `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`
+            : `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`;
+
           const bannerHtml = `
             <div class="space-y-2.5 text-left py-1">
               <div class="font-bold flex items-center gap-1.5 text-amber-900 text-xs">
                 <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                <span>Método 'Correo/Contraseña' pendiente en Firebase</span>
+                <span>${title}</span>
               </div>
               <p class="text-slate-600 text-[11px] leading-relaxed">
-                El proyecto de Firebase <strong>${firebaseConfig.projectId}</strong> requiere activar por única vez el método de inicio de sesión en su consola.
+                ${desc}
               </p>
               <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-                <a href="https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] transition-colors shadow-xs">
+                <a href="${actionLink}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] transition-colors shadow-xs">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                  <span>Activar en Consola Firebase</span>
+                  <span>Abrir Consola Firebase</span>
                 </a>
                 <button type="button" id="btn-activate-account-now" class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 font-bold text-[11px] transition-colors cursor-pointer shadow-2xs">
                   <span>Acceder con mi usuario ahora</span>
