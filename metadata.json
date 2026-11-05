@@ -1,0 +1,6 @@
+{
+  "name": "Gestor de Cuadrante y Auditor de Jornada SAS",
+  "description": "Herramienta profesional para control de jornada anual, turnos (M, T, N, V, LD, DCI), cómputo proporcional de nombramientos y cálculo de excesos horarios en el Servicio Andaluz de Salud (Gerhonte).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

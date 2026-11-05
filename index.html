@@ -1,0 +1,970 @@
+<!doctype html>
+<html lang="es" class="h-full bg-slate-50">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gestor de Cuadrante y Auditor de Jornada SAS (Gerhonte)</title>
+    <meta name="description" content="Herramienta profesional con acceso protegido y sincronización en la nube para control de jornada anual, turnos y cómputo de bolsa DCI en el Servicio Andaluz de Salud." />
+    <meta property="og:title" content="Gestor de Cuadrante y Auditor de Jornada SAS" />
+    <meta property="og:description" content="Herramienta profesional para control de jornada anual y cálculo de excesos horarios en el Servicio Andaluz de Salud (Gerhonte)." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;600;800&display=swap" rel="stylesheet" />
+
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace', 'ui-monospace'],
+            },
+            colors: {
+              sas: {
+                50: '#ecfdf5',
+                100: '#d1fae5',
+                200: '#a7f3d0',
+                300: '#6ee7b7',
+                400: '#34d399',
+                500: '#10b981',
+                600: '#059669',
+                700: '#047857',
+                800: '#065f46',
+                900: '#064e3b',
+                950: '#022c22',
+              }
+            }
+          }
+        }
+      }
+    </script>
+
+    <style>
+      @media print {
+        body {
+          background-color: #ffffff !important;
+          color: #000000 !important;
+          font-size: 11pt;
+        }
+        .no-print {
+          display: none !important;
+        }
+        .print-only {
+          display: block !important;
+        }
+        .print-shadow-none {
+          box-shadow: none !important;
+          border: 1px solid #d1d5db !important;
+          background-color: #ffffff !important;
+        }
+        .break-inside-avoid {
+          break-inside: avoid;
+          page-break-inside: avoid;
+        }
+      }
+      @media screen {
+        .print-only {
+          display: none !important;
+        }
+      }
+      .custom-scrollbar::-webkit-scrollbar {
+        height: 7px;
+        width: 7px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
+  </head>
+  <body class="min-h-full flex flex-col font-sans text-slate-800 antialiased selection:bg-emerald-500 selection:text-white">
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 pointer-events-none no-print"></div>
+
+    <!-- Confirm Modal Container (Sin alertas nativas) -->
+    <div id="modal-container" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs hidden no-print transition-opacity">
+      <div id="modal-card" class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 transform scale-95 transition-transform duration-200">
+        <div class="flex items-center gap-3 text-amber-600 mb-3" id="modal-icon-wrapper">
+          <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+          </svg>
+          <h3 id="modal-title" class="text-lg font-bold text-slate-900">Confirmación</h3>
+        </div>
+        <p id="modal-message" class="text-sm text-slate-600 mb-6 leading-relaxed">¿Estás seguro de continuar?</p>
+        <div class="flex items-center justify-end gap-3">
+          <button id="modal-btn-cancel" class="px-4 py-2 text-sm font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors cursor-pointer">
+            Cancelar
+          </button>
+          <button id="modal-btn-confirm" class="px-4 py-2 text-sm font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg shadow-sm transition-colors cursor-pointer">
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- PORTAL DE ACCESO PROTEGIDO CON CONTRASEÑA Y REGISTRO SAS      -->
+    <!-- ============================================================== -->
+    <div id="auth-portal" class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-md overflow-y-auto no-print">
+      <div class="min-h-full w-full flex flex-col justify-center items-center p-3 sm:p-6 py-6 sm:py-10">
+        <div class="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full p-5 sm:p-7 my-auto relative overflow-hidden">
+        
+          <!-- Banda decorativa superior -->
+          <div class="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-emerald-600 via-teal-500 to-emerald-700"></div>
+
+          <!-- Encabezado del Portal -->
+          <div class="text-center mb-4 sm:mb-5">
+            <div class="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-800 text-white font-black text-xl shadow-lg shadow-emerald-900/20 mb-2.5 border border-emerald-400/30">
+              SAS
+            </div>
+            <h2 class="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+              Gestor de Cuadrante SAS
+            </h2>
+            <p class="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
+              Acceso seguro para profesionales sanitarios (TER/TSID, Enfermería y facultativos estatutarios)
+            </p>
+          </div>
+
+          <!-- Error Banner -->
+          <div id="auth-error-banner" class="hidden mb-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-rose-800 text-xs flex items-center gap-2">
+            <svg class="w-4 h-4 text-rose-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span id="auth-error-text" class="font-medium"></span>
+          </div>
+
+          <!-- Pestañas de Acceso / Registro -->
+          <div class="flex items-center bg-slate-100 p-1 rounded-xl mb-4 text-xs font-bold">
+            <button type="button" id="tab-auth-login" class="flex-1 py-2 rounded-lg bg-white text-emerald-800 shadow-xs transition-all cursor-pointer">
+              Iniciar Sesión
+            </button>
+            <button type="button" id="tab-auth-register" class="flex-1 py-2 rounded-lg text-slate-600 hover:text-slate-900 transition-all cursor-pointer">
+              Nuevo Registro (con Nombramiento)
+            </button>
+          </div>
+
+          <!-- FORMULARIO 1: INICIAR SESIÓN -->
+          <form id="form-login" class="space-y-3.5">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1" for="login-email">Correo Electrónico (o corporativo SAS)</label>
+              <div class="relative">
+                <input type="email" id="login-email" required placeholder="tu.nombre@juntadeandalucia.es" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs text-slate-800 font-medium" />
+              </div>
+            </div>
+
+            <div>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-bold text-slate-700" for="login-password">Contraseña</label>
+              </div>
+              <input type="password" id="login-password" required placeholder="••••••••" class="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 focus:border-emerald-600 focus:ring-2 focus:ring-emerald-500/20 outline-none text-xs text-slate-800 font-medium" />
+            </div>
+
+            <button type="submit" id="btn-submit-login" class="w-full py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-900/10 transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+              <span>Acceder a Mi Cuadrante</span>
+            </button>
+
+            <p class="text-center text-xs text-slate-500 pt-1">
+              ¿Aún no tienes cuenta? 
+              <button type="button" id="link-to-register" class="text-emerald-700 hover:text-emerald-800 font-bold underline cursor-pointer">Regístrate con tus datos de nombramiento</button>
+            </p>
+          </form>
+
+          <!-- FORMULARIO 2: NUEVO REGISTRO CON PARÁMETROS DE NOMBRAMIENTO -->
+          <form id="form-register" class="space-y-3 hidden">
+            <div class="bg-emerald-50/70 border border-emerald-200/60 p-2.5 rounded-xl mb-2.5">
+              <p class="text-[11px] text-emerald-900 font-medium leading-relaxed">
+                <strong>Alta de Profesional:</strong> Configura tu nombramiento inicial (interinidad, sustitución o plaza fija). Estos parámetros se guardarán en tu perfil en la nube y aparecerán protegidos en el cuadrante.
+              </p>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1" for="reg-email">Correo Electrónico *</label>
+                <input type="email" id="reg-email" required placeholder="profesional@juntadeandalucia.es" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1" for="reg-password">Contraseña (mín. 6 car.) *</label>
+                <input type="password" id="reg-password" minlength="6" required placeholder="••••••••" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div>
+                <label class="block font-bold text-slate-700 mb-1" for="reg-name">Nombre y Apellidos *</label>
+                <input type="text" id="reg-name" required placeholder="Nombre y Apellidos del profesional" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+              </div>
+              <div>
+                <label class="block font-bold text-slate-700 mb-1" for="reg-dni">DNI / NIE *</label>
+                <input type="text" id="reg-dni" required placeholder="12345678-A" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+              </div>
+            </div>
+
+            <!-- Parámetros del nombramiento / interinidad -->
+            <div class="pt-2 border-t border-slate-200">
+              <h4 class="text-xs font-black text-slate-800 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                <span>Parámetros del Nombramiento</span>
+              </h4>
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1" for="reg-category">Categoría Estatutaria</label>
+                  <input type="text" id="reg-category" placeholder="Ej: TER/TSID, Enfermería, FEA..." class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1" for="reg-center">Centro Hospitalario / Distrito</label>
+                  <input type="text" id="reg-center" placeholder="Ej: Hospital Universitario Virgen del Rocío" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" />
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mt-2.5 text-xs">
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1" for="reg-start-date">Fecha Inicio</label>
+                  <input type="date" id="reg-start-date" required value="2026-01-01" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1" for="reg-end-date">Fecha Fin Prevista</label>
+                  <input type="date" id="reg-end-date" required value="2026-12-31" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+                </div>
+                <div>
+                  <label class="block font-bold text-slate-700 mb-1" for="reg-regime">Régimen Horario</label>
+                  <select id="reg-regime" class="w-full px-2 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium">
+                    <option value="rotatorio" selected>Rotatorio (1.483h)</option>
+                    <option value="diurno">Diurno (1.540h)</option>
+                    <option value="nocturno">Nocturno (1.450h)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" id="btn-submit-register" class="w-full mt-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-900/10 transition-all flex items-center justify-center gap-2 cursor-pointer">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/></svg>
+              <span>Crear Cuenta y Activar Cuadrante</span>
+            </button>
+
+            <p class="text-center text-xs text-slate-500 pt-1">
+              ¿Ya tienes usuario? 
+              <button type="button" id="link-to-login" class="text-emerald-700 hover:text-emerald-800 font-bold underline cursor-pointer">Inicia sesión aquí</button>
+            </p>
+          </form>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL PARA MODIFICAR PARÁMETROS DEL NOMBRAMIENTO               -->
+    <!-- ============================================================== -->
+    <div id="edit-params-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs hidden no-print transition-opacity">
+      <div class="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-6 sm:p-7 border border-slate-200 overflow-y-auto max-h-[90vh]">
+        <div class="flex items-center justify-between pb-3 mb-4 border-b border-slate-100">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 bg-emerald-50 text-emerald-800 rounded-xl">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Modificar Parámetros del Nombramiento</h3>
+              <p class="text-xs text-slate-500">Actualiza las condiciones de tu interinidad, jornada y servicio SAS</p>
+            </div>
+          </div>
+          <button id="btn-close-edit-params" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <form id="form-edit-params" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-worker-name">Nombre y Apellidos</label>
+              <input type="text" id="edit-worker-name" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-worker-dni">DNI / NIE</label>
+              <input type="text" id="edit-worker-dni" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-category">Categoría Profesional</label>
+              <input type="text" id="edit-category" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-center">Centro Hospitalario</label>
+              <input type="text" id="edit-center" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-service">Servicio / Unidad</label>
+              <input type="text" id="edit-service" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-regime">Régimen Horario SAS</label>
+              <select id="edit-regime" class="w-full px-3 py-2 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium">
+                <option value="rotatorio">Rotatorio (con noches) - 1.483h</option>
+                <option value="diurno">Diurno Ordinario - 1.540h</option>
+                <option value="nocturno">Nocturno Fijo - 1.450h</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-start-date">Fecha Inicio</label>
+              <input type="date" id="edit-start-date" required class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-end-date">Fecha Fin Prevista</label>
+              <input type="date" id="edit-end-date" required class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-700 mb-1" for="edit-base-hours">Jornada Anual Base (h)</label>
+              <input type="number" id="edit-base-hours" step="1" min="100" max="2500" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+          </div>
+
+          <div class="pt-3 border-t border-slate-100 flex items-center justify-end gap-3">
+            <button type="button" id="btn-cancel-edit-params" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer">
+              Cancelar
+            </button>
+            <button type="submit" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-sm transition-all cursor-pointer">
+              Guardar y Recalcular
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- BARRA SUPERIOR INSTITUCIONAL SAS / GERHONTE                    -->
+    <!-- ============================================================== -->
+    <header class="bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 text-white border-b border-emerald-800/80 shadow-md no-print">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+        <!-- Logo y Título -->
+        <div class="flex items-center gap-3.5">
+          <div class="w-11 h-11 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-inner text-white font-black text-xl tracking-tighter border border-emerald-300/30">
+            SAS
+          </div>
+          <div>
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg sm:text-xl font-black tracking-tight text-white flex items-center gap-1.5">
+                Gestor de Cuadrante y Auditor de Jornada SAS
+              </h1>
+              <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                Gerhonte 35h
+              </span>
+            </div>
+            <p class="text-xs text-emerald-200/80 flex items-center gap-2">
+              <span>Control anual, cuadrante y bolsa DCI</span>
+              <span class="text-emerald-400/40">•</span>
+              <span id="cloud-status-text" class="text-emerald-300 font-medium">Sincronización en la Nube SAS</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Acciones de Usuario y Cabecera -->
+        <div class="flex items-center flex-wrap gap-2 text-xs">
+          <!-- Identificador de usuario activo -->
+          <div class="hidden md:flex items-center gap-2 bg-emerald-900/60 px-3 py-1.5 rounded-lg border border-emerald-700/50">
+            <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span id="user-display-email" class="text-emerald-100 font-semibold max-w-[180px] truncate">Sesión SAS</span>
+          </div>
+
+          <!-- Selector de Año Abierto (sin límites preestablecidos) -->
+          <div class="inline-flex items-center gap-1 bg-slate-800/90 border border-slate-700/70 px-1.5 py-1 rounded-lg shadow-xs" title="Ajustar o escribir año de trabajo">
+            <button type="button" id="header-btn-year-prev" class="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer" title="Año anterior">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div class="flex items-center">
+              <label for="header-input-year" class="text-slate-400 font-semibold text-[11px] mr-1 hidden sm:inline">Año</label>
+              <input type="number" id="header-input-year" min="1990" max="2150" step="1" value="2026" class="w-14 sm:w-16 bg-slate-900/60 text-center font-mono font-black text-xs text-emerald-300 outline-none border border-slate-700/50 focus:border-emerald-500 rounded px-1 py-0.5 selection:bg-emerald-800 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" title="Escribe cualquier año (ej: 2026, 2031, 2035...)" />
+            </div>
+            <button type="button" id="header-btn-year-next" class="p-1 rounded text-slate-400 hover:text-white hover:bg-slate-700/60 transition-colors cursor-pointer" title="Año siguiente">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <button id="btn-export-csv" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-medium bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/60 transition-all cursor-pointer" title="Exportar cuadrante a hoja de cálculo CSV">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            <span>CSV</span>
+          </button>
+
+          <!-- Cerrar Sesión -->
+          <button id="btn-logout" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-semibold bg-rose-900/60 hover:bg-rose-800 text-rose-200 hover:text-white border border-rose-700/50 transition-all cursor-pointer" title="Cerrar sesión actual">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+            <span>Salir</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- CUERPO PRINCIPAL DE LA APLICACIÓN -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-5 space-y-5">
+      
+      <!-- ============================================================== -->
+      <!-- SECCIÓN COLAPSABLE: PARÁMETROS DEL NOMBRAMIENTO ACTIVO        -->
+      <!-- ============================================================== -->
+      <details id="details-params-card" class="group bg-slate-100/90 border border-slate-300/80 shadow-xs rounded-2xl overflow-hidden backdrop-blur-xs no-print transition-all">
+        <summary class="p-3.5 sm:p-4 flex items-center justify-between cursor-pointer list-none select-none hover:bg-slate-200/60 transition-colors">
+          <div class="flex items-center gap-2.5">
+            <div class="p-1.5 bg-slate-200 text-slate-700 rounded-lg shadow-xs group-open:bg-emerald-100 group-open:text-emerald-800 transition-colors">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 flex-wrap">
+                <h2 class="text-xs font-black text-slate-800 uppercase tracking-wider">Parámetros del Nombramiento Activo</h2>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-slate-200/90 text-slate-700 border border-slate-300">
+                  Fijados en Registro
+                </span>
+                <span class="text-[10px] text-emerald-800 font-semibold hidden md:inline">
+                  (Toca para desplegar/colapsar)
+                </span>
+              </div>
+              <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-1">
+                <span id="summary-nom-dates" class="font-medium text-slate-700">Sin nombramiento</span> • <span id="summary-nom-regime" class="font-medium text-slate-700">Por configurar</span> • <span id="summary-nom-category" class="font-medium text-slate-700">Profesional SAS</span>
+              </p>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button type="button" id="btn-open-edit-params" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-700 hover:bg-emerald-800 active:scale-95 text-white shadow-xs transition-all cursor-pointer" title="Modificar parámetros del nombramiento">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+              </svg>
+              <span class="hidden sm:inline">Modificar</span>
+            </button>
+            <svg class="w-4 h-4 text-slate-400 group-open:rotate-180 transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+        </summary>
+
+        <!-- Contenido desplegable con campos sombreados -->
+        <div class="p-4 pt-3 border-t border-slate-200/80 bg-slate-50/60">
+          <p class="text-[11px] text-slate-500 mb-3">
+            Estos parámetros determinan el cálculo proporcional de tu contrato en Gerhonte. Pulsa "Modificar" para cambiarlos.
+          </p>
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+            <!-- Fecha Inicio -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Inicio Nombramiento</label>
+              <input type="date" id="cfg-start-date" disabled class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none" />
+            </div>
+
+            <!-- Fecha Fin -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Fecha Prevista Cese</label>
+              <input type="date" id="cfg-end-date" disabled class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none" />
+            </div>
+
+            <!-- Régimen Horario -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Régimen Horario SAS</label>
+              <select id="cfg-regime" disabled class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none">
+                <option value="rotatorio">Rotatorio (con noches) - 1.483h</option>
+                <option value="diurno">Diurno Ordinario - 1.540h</option>
+                <option value="nocturno">Nocturno Fijo - 1.450h</option>
+                <option value="custom">Personalizado</option>
+              </select>
+            </div>
+
+            <!-- Base Horas Anual -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Jornada Anual Base</label>
+              <div class="relative">
+                <input type="number" id="cfg-base-hours" disabled class="w-full px-2.5 py-1.5 pr-7 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none" />
+                <span class="absolute right-2 top-1.5 text-slate-400 font-bold">h</span>
+              </div>
+            </div>
+
+            <!-- Categoría Profesional -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Categoría Estatutaria</label>
+              <input type="text" id="cfg-category" disabled class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none" />
+            </div>
+
+            <!-- Centro / Hospital -->
+            <div>
+              <label class="block font-bold text-slate-600 mb-1">Centro Hospitalario</label>
+              <input type="text" id="cfg-center" disabled class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-200/70 text-slate-800 font-bold cursor-not-allowed select-none" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Parámetros horarios complementarios (ocultos o sincronizados) -->
+        <div class="hidden">
+          <input type="number" id="cfg-shift-m" value="7.0" />
+          <input type="number" id="cfg-shift-t" value="7.0" />
+          <input type="number" id="cfg-shift-n" value="10.0" />
+          <input type="number" id="cfg-shift-v" value="7.0" />
+          <input type="number" id="cfg-shift-ld" value="7.0" />
+          <input type="number" id="cfg-shift-dci" value="7.0" />
+        </div>
+      </details>
+
+      <!-- ============================================================== -->
+      <!-- SECCIÓN 2: TARJETAS KPI DE SALDO Y MÉTRICAS GERHONTE (2x2 móvil)-->
+      <!-- ============================================================== -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-print">
+        
+        <!-- KPI 1: Saldo Acumulado Total -->
+        <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
+          <div class="flex items-center justify-between gap-1 mb-1.5">
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Saldo Bolsa</span>
+            <span id="kpi-balance-badge" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-emerald-100 text-emerald-800 shrink-0">
+              A Favor
+            </span>
+          </div>
+          <div class="my-0.5">
+            <span id="kpi-balance" class="text-xl sm:text-3xl font-black tracking-tight text-emerald-600 font-mono block">+0,0 h</span>
+            <p id="kpi-balance-label" class="text-[10px] sm:text-xs font-semibold text-emerald-800 mt-0.5 truncate">Exceso acumulado</p>
+          </div>
+          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
+            <span id="kpi-balance-sub" class="truncate font-mono">0.0h / 0.0h exig.</span>
+          </div>
+        </div>
+
+        <!-- KPI 2: Días Libres Generados (DCI) -->
+        <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
+          <div class="flex items-center justify-between gap-1 mb-1.5">
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Días DCI</span>
+            <span class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0">
+              Descanso
+            </span>
+          </div>
+          <div class="my-0.5">
+            <span id="kpi-dci-days" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 Días</span>
+            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Jornadas 7h</p>
+          </div>
+          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
+            <span id="kpi-dci-sub" class="truncate font-mono">+0,0h bolsa</span>
+          </div>
+        </div>
+
+        <!-- KPI 3: Jornada Neta Exigible Proporcional -->
+        <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
+          <div class="flex items-center justify-between gap-1 mb-1.5">
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Jornada Exigible</span>
+            <span id="kpi-contract-days" class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-700 shrink-0 truncate max-w-[85px] sm:max-w-none">
+              0 d
+            </span>
+          </div>
+          <div class="my-0.5">
+            <span id="kpi-required-hours" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0.0 h</span>
+            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Cuota proporcional</p>
+          </div>
+          <div class="pt-2 border-t border-slate-100">
+            <div class="flex items-center justify-between text-[10px] sm:text-[11px] text-slate-500 mb-1">
+              <span>Progreso</span>
+              <span id="kpi-required-percent" class="font-bold text-slate-800">0%</span>
+            </div>
+            <div class="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+              <div id="kpi-balance-bar" class="bg-emerald-600 h-full rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- KPI 4: Turnos Restantes para Fin de Año -->
+        <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
+          <div class="flex items-center justify-between gap-1 mb-1.5">
+            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Pendiente 0h</span>
+            <span class="px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-amber-100 text-amber-800 shrink-0">
+              Meta 0h
+            </span>
+          </div>
+          <div class="my-0.5">
+            <span id="kpi-remaining-shifts" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 turnos</span>
+            <p class="text-[10px] sm:text-xs font-semibold text-slate-500 mt-0.5 truncate">Para cuadrar</p>
+          </div>
+          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
+            <span id="kpi-remaining-hours" class="truncate font-mono">0.0 h pend.</span>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- SECCIÓN 3: SELECTOR DE PESTAÑAS (MODOS PRINCIPALES)            -->
+      <!-- ============================================================== -->
+      <nav class="flex items-center gap-1.5 p-1 bg-slate-200/80 rounded-xl no-print overflow-x-auto text-xs font-bold scrollbar-none">
+        <button type="button" data-tab="calendar" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer bg-emerald-700 text-white shadow-xs whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+          <span>1. Calendario</span>
+        </button>
+        <button type="button" data-tab="table" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+          <span>2. Resumen (Gerhonte)</span>
+        </button>
+        <button type="button" data-tab="projection" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
+          <span>3. Planificador</span>
+        </button>
+        <button type="button" data-tab="request" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+          <span>4. Solicitud DCI</span>
+        </button>
+        <button type="button" data-tab="rules" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          <span>5. Normativa</span>
+        </button>
+      </nav>
+
+      <!-- ============================================================== -->
+      <!-- PESTAÑA A: CALENDARIO VISUAL INTERACTIVO DÍA A DÍA             -->
+      <!-- ============================================================== -->
+      <section id="tab-calendar" class="tab-panel space-y-4">
+        
+        <!-- Barra de selección de mes y paleta de pinceles -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 flex flex-col md:flex-row items-center justify-between gap-4 no-print">
+          
+          <!-- Controles de Mes -->
+          <div class="flex items-center gap-2 w-full md:w-auto justify-between md:justify-start">
+            <button id="cal-btn-prev" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer" title="Mes Anterior">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+            </button>
+            <div class="flex items-center gap-2">
+              <select id="cal-select-month" class="px-3 py-1.5 rounded-xl border border-slate-300 font-bold text-slate-800 text-sm focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none cursor-pointer">
+                <option value="0">Enero</option>
+                <option value="1">Febrero</option>
+                <option value="2">Marzo</option>
+                <option value="3" selected>Abril</option>
+                <option value="4">Mayo</option>
+                <option value="5">Junio</option>
+                <option value="6">Julio</option>
+                <option value="7">Agosto</option>
+                <option value="8">Septiembre</option>
+                <option value="9">Octubre</option>
+                <option value="10">Noviembre</option>
+                <option value="11">Diciembre</option>
+              </select>
+              <span id="cal-year-display" class="font-mono font-bold text-slate-700 text-sm">2026</span>
+            </div>
+            <button id="cal-btn-next" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer" title="Mes Siguiente">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+          </div>
+
+          <!-- Paleta de Pinceles de Turno -->
+          <div class="flex items-center flex-wrap gap-1.5 w-full md:w-auto justify-center md:justify-end text-xs">
+            <span class="text-slate-400 font-semibold mr-1 text-[11px] hidden lg:inline">Pincel:</span>
+            
+            <button type="button" data-brush="M" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-amber-100 text-amber-900 border-amber-400 ring-2 ring-amber-500">
+              [M] Mañana (7h)
+            </button>
+            <button type="button" data-brush="T" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-orange-50 text-orange-800 border-orange-200 hover:bg-orange-100">
+              [T] Tarde (7h)
+            </button>
+            <button type="button" data-brush="N" id="brush-label-n" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100">
+              [N] Noche (10h)
+            </button>
+            <button type="button" data-brush="S" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200" title="Saliente de noche o descanso estatutario (0h)">
+              [S] Saliente (0h)
+            </button>
+            <button type="button" data-brush="V" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
+              [V] Vacaciones (7h)
+            </button>
+            <button type="button" data-brush="LD" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-purple-50 text-purple-800 border-purple-200 hover:bg-purple-100">
+              [LD] Moscoso (7h)
+            </button>
+            <button type="button" data-brush="DCI" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100" title="Descanso Compensatorio por Exceso (-7h de exceso acumulado)">
+              [DCI] Día DCI (-7h)
+            </button>
+            <button type="button" data-brush="G" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200 hover:bg-fuchsia-100" title="Guardia extra / Atención continuada (0h en bolsa)">
+              [G] Guardia (0h)
+            </button>
+            <button type="button" data-brush="CLEAR" class="brush-btn px-2 py-1.5 rounded-lg font-medium border border-rose-200 text-rose-700 hover:bg-rose-50 transition-all cursor-pointer" title="Borrar turno del día">
+              Borrar (X)
+            </button>
+          </div>
+        </div>
+
+        <!-- Rejilla del Calendario -->
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 overflow-hidden">
+          
+          <!-- Encabezado de Días de la Semana -->
+          <div class="grid grid-cols-7 gap-1 sm:gap-2 text-center text-xs font-bold text-slate-500 mb-2 border-b border-slate-100 pb-2">
+            <div>LUN</div>
+            <div>MAR</div>
+            <div>MIÉ</div>
+            <div>JUE</div>
+            <div>VIE</div>
+            <div class="text-rose-600">SÁB</div>
+            <div class="text-rose-600">DOM</div>
+          </div>
+
+          <!-- Celdas del Calendario -->
+          <div id="calendar-grid" class="grid grid-cols-7 gap-1 sm:gap-2">
+            <!-- Celdas renderizadas dinámicamente -->
+          </div>
+
+          <!-- Resumen del Mes Visualizado -->
+          <div class="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div class="flex items-center gap-3">
+              <span class="text-slate-500">Horas trabajadas este mes: <strong id="cal-month-worked" class="text-slate-900 font-mono">0,0 h</strong></span>
+              <span class="text-slate-300">|</span>
+              <span class="text-slate-500">Exigibles proporcionales: <strong id="cal-month-required" class="text-slate-900 font-mono">0,0 h</strong></span>
+              <span class="text-slate-300">|</span>
+              <span class="text-slate-500">Saldo del mes: <strong id="cal-month-balance" class="font-mono text-emerald-700 font-bold">0,0 h</strong></span>
+            </div>
+            <div id="cal-month-breakdown" class="text-slate-500 text-[11px] font-mono">
+              0M • 0T • 0N • 0V • 0LD • 0DCI
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- PESTAÑA B: RESUMEN NUMÉRICO MENSUAL (TABLA GERHONTE)           -->
+      <!-- ============================================================== -->
+      <section id="tab-table" class="tab-panel hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5">
+          <div class="flex flex-wrap items-center justify-between pb-3 mb-3 border-b border-slate-100 gap-3">
+            <div>
+              <h3 class="text-sm font-bold text-slate-900 uppercase tracking-wider">Cómputo Mensual y Acumulado Gerhonte (<span id="table-year-display" class="text-emerald-700">2026</span>)</h3>
+              <p class="text-xs text-slate-500">Auditoría oficial de turnos y cuota proporcional según tu nombramiento SAS</p>
+            </div>
+            <div class="flex items-center gap-2 text-xs no-print">
+              <button id="btn-print-table" class="px-3 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 font-medium transition-colors cursor-pointer flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                <span>Imprimir Tabla</span>
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full text-xs text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-100 text-slate-700 border-b border-slate-200 uppercase tracking-wider font-bold text-[11px]">
+                  <th class="sticky left-0 bg-slate-100 z-20 py-2.5 px-3 text-left border-r border-slate-200 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">Mes</th>
+                  <th class="py-2.5 px-2 text-center">Días Activo</th>
+                  <th class="py-2.5 px-2 text-center text-emerald-950 bg-emerald-50/70">Cuota Exigible</th>
+                  <th class="py-2.5 px-2 text-center text-amber-800">M (7h)</th>
+                  <th class="py-2.5 px-2 text-center text-orange-800">T (7h)</th>
+                  <th class="py-2.5 px-2 text-center text-indigo-800">N (10h)</th>
+                  <th class="py-2.5 px-2 text-center text-emerald-800">Vac (7h)</th>
+                  <th class="py-2.5 px-2 text-center text-purple-800">LD (7h)</th>
+                  <th class="py-2.5 px-2 text-center text-cyan-800">DCI Disfr.</th>
+                  <th class="py-2.5 px-2 text-center text-fuchsia-800">Guardias</th>
+                  <th class="py-2.5 px-2 text-center bg-slate-200/60 text-slate-900">Horas Cumplidas</th>
+                  <th class="py-2.5 px-2 text-center">Saldo Mes</th>
+                  <th class="py-2.5 px-3 text-right font-black">Saldo Acumulado</th>
+                </tr>
+              </thead>
+              <tbody id="gerhonte-table-body" class="divide-y divide-slate-100">
+                <!-- Renderizado dinámicamente -->
+              </tbody>
+              <tfoot id="gerhonte-table-totals" class="bg-slate-100/90 font-bold border-t-2 border-slate-300">
+                <!-- Totales calculados -->
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- PESTAÑA C: PLANIFICADOR DCI Y PROYECCIÓN                       -->
+      <!-- ============================================================== -->
+      <section id="tab-projection" class="tab-panel hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6">
+          <div class="max-w-2xl">
+            <h3 class="text-base font-bold text-slate-900 tracking-tight">Simulador de Disfrute de DCI y Turnos de Fin de Contrato</h3>
+            <p class="text-xs text-slate-500 mt-1">
+              Comprueba el impacto de solicitar días libres (DCI) y calcula cuántos turnos debes realizar mensualmente en los meses restantes para finalizar en saldo 0.
+            </p>
+          </div>
+
+          <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <!-- Slider de Simulación de DCI -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+              <div class="flex items-center justify-between mb-2">
+                <label for="slider-dci" class="text-xs font-bold text-slate-800">Simular Disfrute de Días DCI:</label>
+                <span id="slider-dci-val" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-800">0 días (0h)</span>
+              </div>
+              <input type="range" id="slider-dci" min="0" max="30" value="0" step="1" class="w-full accent-cyan-600 cursor-pointer" />
+              <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1">
+                <span>0 días</span>
+                <span>Máx. disponible: <strong id="proj-dci-available">0 días</strong></span>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-slate-200/80 text-xs space-y-2">
+                <div class="flex justify-between">
+                  <span class="text-slate-600">Saldo proyectado tras DCI:</span>
+                  <span id="proj-simulated-balance" class="font-mono font-bold text-emerald-700">+0,0 h</span>
+                </div>
+                <div class="flex justify-between">
+                  <span class="text-slate-600">Turnos promedio/mes en meses restantes:</span>
+                  <span id="proj-simulated-monthly-shifts" class="font-mono font-bold text-slate-800">0 turnos/mes</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Diagnóstico Proyectado -->
+            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200/70 flex flex-col justify-between">
+              <div>
+                <div class="flex items-center gap-2 mb-2">
+                  <span id="proj-status-tag" class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-200 text-emerald-900">
+                    Posición Ventajosa
+                  </span>
+                </div>
+                <h4 id="proj-headline" class="text-sm font-bold text-slate-900">Exceso Disponible para Disfrute</h4>
+                <p id="proj-description" class="text-xs text-slate-600 mt-2 leading-relaxed">
+                  Con tu cuadrante actual has generado exceso de horas en la bolsa. Puedes solicitar tus descansos compensatorios (DCI) con antelación a tu dirección de servicio.
+                </p>
+              </div>
+
+              <div class="mt-4 pt-3 border-t border-emerald-200/50">
+                <p class="text-[11px] font-semibold text-emerald-900 mb-1.5">Distribución de turnos restantes:</p>
+                <div id="proj-pending-months-list" class="flex flex-wrap gap-1.5 text-[10px] font-mono">
+                  <!-- Meses restantes dinámicos -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- PESTAÑA D: SOLICITUD FORMAL DCI (LISTA PARA IMPRIMIR)           -->
+      <!-- ============================================================== -->
+      <section id="tab-request" class="tab-panel hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 sm:p-7">
+          <div class="flex flex-wrap items-center justify-between pb-4 mb-4 border-b border-slate-100 gap-3 no-print">
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Generador de Escrito de Solicitud de DCI</h3>
+              <p class="text-xs text-slate-500">Documento formal redactado con cita estatutaria para entregar a Dirección de Enfermería / Personal</p>
+            </div>
+            <div class="flex items-center gap-2">
+              <button id="btn-copy-request" class="px-3.5 py-1.5 rounded-lg border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/></svg>
+                <span>Copiar Texto</span>
+              </button>
+              <button id="btn-print-request" class="px-3.5 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>
+                <span>Imprimir / Guardar PDF</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Parámetro de fechas propuestas (Nombre y DNI se toman automáticamente del registro) -->
+          <div class="mb-4 text-xs no-print bg-slate-50 p-3.5 rounded-xl border border-slate-200 max-w-xl">
+            <div class="flex items-center justify-between mb-1.5">
+              <label class="block font-bold text-slate-700" for="req-proposed-dates">Fechas Propuestas para Disfrute de DCI</label>
+              <span class="text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                Datos personales tomados de tu perfil
+              </span>
+            </div>
+            <input type="text" id="req-proposed-dates" value="Días 14, 15 y 16 de Diciembre" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white font-medium focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none" placeholder="Ej: Días 14, 15 y 16 de Diciembre" />
+          </div>
+
+          <!-- Cuadro de Vista Previa del Escrito Formal -->
+          <div class="p-6 sm:p-8 bg-white border border-slate-300 rounded-xl font-mono text-xs text-slate-800 leading-relaxed whitespace-pre-wrap shadow-inner print-shadow-none" id="request-preview-box">
+            <!-- Escrito redactado dinámicamente -->
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================== -->
+      <!-- PESTAÑA E: NORMATIVA Y REGLAS GERHONTE SAS                     -->
+      <!-- ============================================================== -->
+      <section id="tab-rules" class="tab-panel hidden space-y-4">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">Normativa Estatutaria y Cómputo de Jornada en el SAS</h3>
+            <p class="text-xs text-slate-500 mt-1">
+              Marco normativo oficial aplicable a la jornada de 35 horas semanales, turnos de trabajo y compensación de excesos en centros del Servicio Andaluz de Salud.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">1. Jornada Anual Base (35h Semanales)</h4>
+              <p class="text-slate-600 leading-relaxed">
+                El Decreto-ley de jornada de 35 horas semanales en la Junta de Andalucía y los acuerdos de Mesa Sectorial del SAS establecen:
+              </p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1">
+                <li><strong>Diurno Ordinario:</strong> 1.540 horas netas anuales de trabajo efectivo.</li>
+                <li><strong>Rotatorio (con noches):</strong> 1.483 horas netas anuales (ponderación por penosidad nocturna).</li>
+                <li><strong>Nocturno Fijo:</strong> 1.450 horas netas anuales.</li>
+              </ul>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">2. Cómputo Proporcional para Interinos y Sustitutos</h4>
+              <p class="text-slate-600 leading-relaxed">
+                Cuando el nombramiento no abarca los 365 días naturales del año, la exigencia horaria no es total sino estrictamente proporcional:
+              </p>
+              <div class="p-2.5 bg-white rounded-lg border border-slate-200 font-mono text-[11px] text-slate-800">
+                Jornada_Exigible = Math.round((Días_Contrato / 365) * Jornada_Base)
+              </div>
+              <p class="text-[11px] text-slate-500">
+                Cada mes devenga una cuota exigible equivalente a los días naturales del mes en los que el contrato estuvo en vigor.
+              </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">3. Régimen de Salientes de Noche y Descansos</h4>
+              <p class="text-slate-600 leading-relaxed">
+                Tras la realización de un turno nocturno de 10 horas, el profesional genera el derecho reglamentario al descanso de salud laboral de 24h a 48h (Saliente / Libre):
+              </p>
+              <p class="text-slate-700">
+                <strong>IMPORTANTE:</strong> El saliente computa <strong>0,0 horas</strong> efectivas de trabajo (es libranza biológica, no trabajo). Las horas fueron devengadas íntegramente en la noche previa.
+              </p>
+            </div>
+
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
+              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">4. Descanso Compensatorio por Exceso (DCI)</h4>
+              <p class="text-slate-600 leading-relaxed">
+                Cuando el cuadrante programado supere las horas proporcionales exigibles a la fecha, el exceso se consolida en la bolsa de horas a favor del profesional:
+              </p>
+              <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1">
+                <li>Cada <strong>7 horas</strong> de exceso generan <strong>1 día completo de libranza DCI</strong>.</li>
+                <li>El disfrute de un día DCI resta 7h del exceso a favor sin penalizar la retribución ordinaria.</li>
+                <li>Si al cese del contrato no ha sido posible disfrutarlos, deben liquidarse o compensarse formalmente.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- PIE DE PÁGINA INSTITUCIONAL -->
+    <footer class="bg-white border-t border-slate-200/90 py-5 mt-8 text-xs text-slate-500 text-center no-print">
+      <div class="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <p class="font-medium text-slate-600">
+          Gestor de Cuadrante SAS • Sistema de Auditoría Horaria Gerhonte
+        </p>
+        <p class="text-slate-400">
+          Sincronización segura en la nube SAS para profesionales estatutarios
+        </p>
+      </div>
+    </footer>
+
+    <!-- SCRIPT PRINCIPAL MODULAR (Firebase Auth + Firestore Cloud + Gerhonte Engine) -->
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>

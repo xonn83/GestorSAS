@@ -1,0 +1,134 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Perfil de usuario y datos profesionales estatutarios del SAS",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID del usuario"
+        },
+        "email": {
+          "type": "string",
+          "description": "Correo electrónico corporativo o personal del profesional"
+        },
+        "workerName": {
+          "type": "string",
+          "description": "Nombre y apellidos completos"
+        },
+        "category": {
+          "type": "string",
+          "description": "Categoría profesional estatutaria (TER, Enfermería, etc.)"
+        },
+        "center": {
+          "type": "string",
+          "description": "Hospital o Distrito Sanitario de destino"
+        },
+        "service": {
+          "type": "string",
+          "description": "Unidad o Servicio Asistencial"
+        },
+        "dni": {
+          "type": "string",
+          "description": "Documento Nacional de Identidad"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Marca temporal de creación"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Marca temporal de última modificación"
+        }
+      },
+      "required": ["userId", "email", "workerName", "category", "center"]
+    },
+    "CuadranteData": {
+      "title": "CuadranteData",
+      "description": "Registro completo del cuadrante anual, turnos día a día y cómputo de jornada Gerhonte",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "UID del propietario del cuadrante"
+        },
+        "startDate": {
+          "type": "string",
+          "description": "Fecha de inicio del nombramiento (YYYY-MM-DD)"
+        },
+        "endDate": {
+          "type": "string",
+          "description": "Fecha de fin / cese del nombramiento (YYYY-MM-DD)"
+        },
+        "regime": {
+          "type": "string",
+          "description": "Régimen horario SAS: rotatorio, diurno o nocturno"
+        },
+        "baseHours": {
+          "type": "number",
+          "description": "Horas base netas anuales exigibles al 100%"
+        },
+        "hoursM": {
+          "type": "number",
+          "description": "Horas computadas por turno de mañana"
+        },
+        "hoursT": {
+          "type": "number",
+          "description": "Horas computadas por turno de tarde"
+        },
+        "hoursN": {
+          "type": "number",
+          "description": "Horas computadas por turno de noche"
+        },
+        "hoursS": {
+          "type": "number",
+          "description": "Horas computadas por turno de saliente (0h)"
+        },
+        "hoursV": {
+          "type": "number",
+          "description": "Horas computadas por día hábil de vacaciones"
+        },
+        "hoursLD": {
+          "type": "number",
+          "description": "Horas computadas por día de asuntos propios (LD)"
+        },
+        "hoursDCI": {
+          "type": "number",
+          "description": "Horas computadas por día de libranza por exceso (DCI)"
+        },
+        "proposedDates": {
+          "type": "string",
+          "description": "Propuesta de fechas para el disfrute de DCI"
+        },
+        "calendarShifts": {
+          "type": "object",
+          "description": "Mapa clave-valor de fechas YYYY-MM-DD a códigos de turno (M, T, N, etc.)"
+        },
+        "monthlyTableData": {
+          "type": "array",
+          "description": "Array de 12 meses con el cómputo numérico mensual"
+        },
+        "calendarYear": {
+          "type": "number",
+          "description": "Año natural del cuadrante"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Marca temporal de actualización"
+        }
+      },
+      "required": ["userId", "startDate", "endDate", "regime", "baseHours"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Documento de perfil del profesional sanitario propietario"
+    },
+    "/users/{userId}/data/{docId}": {
+      "schema": "CuadranteData",
+      "description": "Colección de datos de cuadrante y auditoría horaria del usuario"
+    }
+  }
+}
