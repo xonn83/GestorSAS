@@ -7,16 +7,16 @@ Herramienta profesional diseñada para profesionales del **Servicio Andaluz de S
 ## 📋 Características Principales
 
 1. **Calendario Interactivo Día a Día**:
-   - Asignación rápida de turnos mediante paleta de pinceles visuales o atajos de teclado (`M`, `T`, `N`, `S`, `V`, `L`, `D`, `G`, `X`/Borrar).
-   - Tipos de turno contemplados:
+   - Asignación rápida de turnos mediante paleta de pinceles visuales o atajos de teclado (`M`, `T`, `N`, `2`/`B`, `V`, `L`, `D`, `X`/Borrar).
+   - Control de validación automática: En régimen diurno (L-V), el sistema avisa e impide asignar vacaciones (V), moscosos (LD) o descansos DCI en fines de semana (sábados y domingos no laborables).
+   - Tipos de turno operativos:
      - **[M] Mañana**: +7,0 horas efectivas.
      - **[T] Tarde**: +7,0 horas efectivas.
      - **[N] Noche**: +10,0 horas efectivas.
-     - **[S] Saliente / Libre**: 0,0 horas efectivas (libranza biológica reglamentaria tras noche).
-     - **[V] Vacaciones**: +7,0 horas efectivas.
+     - **[MN] Mañana + Noche (Doble Turno)**: +17,0 horas efectivas (7h de mañana + 10h de noche), computadas íntegramente en la fecha en que se inicia la jornada conforme al criterio de registro Gerhonte del SAS.
+     - **[V] Vacaciones**: +7,0 horas efectivas (en días laborables de lunes a viernes en régimen diurno).
      - **[LD] Moscoso (Asuntos Particulares)**: +7,0 horas efectivas.
      - **[DCI] Día de Descanso Compensatorio**: -7,0 horas del exceso acumulado a favor.
-     - **[G] Guardia Médica / Continuada**: Registro asistencial de 17h/24h (0h a cómputo ordinario de bolsa).
 
 2. **Resumen y Auditoría Numérica Mensual (Gerhonte)**:
    - Tabla comparativa mes a mes de turnos realizados vs. horas exigibles proporcionales.

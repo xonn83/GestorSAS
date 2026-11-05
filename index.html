@@ -681,8 +681,8 @@
             <button type="button" data-brush="N" id="brush-label-n" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-indigo-50 text-indigo-800 border-indigo-200 hover:bg-indigo-100">
               [N] Noche (10h)
             </button>
-            <button type="button" data-brush="S" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200" title="Saliente de noche o descanso estatutario (0h)">
-              [S] Saliente (0h)
+            <button type="button" data-brush="MN" id="brush-label-mn" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-fuchsia-100 text-fuchsia-950 border-fuchsia-300 hover:bg-fuchsia-200 shadow-2xs" title="Jornada Doble: Mañana (7h) + Noche (10h) = 17h computadas en este día">
+              [MN] Mañana+Noche (17h)
             </button>
             <button type="button" data-brush="V" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100">
               [V] Vacaciones (7h)
@@ -692,9 +692,6 @@
             </button>
             <button type="button" data-brush="DCI" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-cyan-50 text-cyan-800 border-cyan-200 hover:bg-cyan-100" title="Descanso Compensatorio por Exceso (-7h de exceso acumulado)">
               [DCI] Día DCI (-7h)
-            </button>
-            <button type="button" data-brush="G" class="brush-btn px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-fuchsia-50 text-fuchsia-800 border-fuchsia-200 hover:bg-fuchsia-100" title="Guardia extra / Atención continuada (0h en bolsa)">
-              [G] Guardia (0h)
             </button>
             <button type="button" data-brush="CLEAR" class="brush-btn px-2 py-1.5 rounded-lg font-medium border border-rose-200 text-rose-700 hover:bg-rose-50 transition-all cursor-pointer" title="Borrar turno del día">
               Borrar (X)
@@ -768,7 +765,6 @@
                   <th class="py-2.5 px-2 text-center text-emerald-800">Vac (7h)</th>
                   <th class="py-2.5 px-2 text-center text-purple-800">LD (7h)</th>
                   <th class="py-2.5 px-2 text-center text-cyan-800">DCI Disfr.</th>
-                  <th class="py-2.5 px-2 text-center text-fuchsia-800">Guardias</th>
                   <th class="py-2.5 px-2 text-center bg-slate-200/60 text-slate-900">Horas Cumplidas</th>
                   <th class="py-2.5 px-2 text-center">Saldo Mes</th>
                   <th class="py-2.5 px-3 text-right font-black">Saldo Acumulado</th>

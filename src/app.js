@@ -92,6 +92,7 @@ const SHIFT_TYPES = {
   M: { label: "Mañana", code: "M", hours: 7.0, bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-300" },
   T: { label: "Tarde", code: "T", hours: 7.0, bg: "bg-orange-100", text: "text-orange-900", border: "border-orange-300" },
   N: { label: "Noche", code: "N", hours: 10.0, bg: "bg-indigo-100", text: "text-indigo-900", border: "border-indigo-300" },
+  MN: { label: "Mañana + Noche", code: "MN", hours: 17.0, bg: "bg-fuchsia-100", text: "text-fuchsia-950", border: "border-fuchsia-300" },
   S: { label: "Saliente / Libre", code: "S", hours: 0.0, bg: "bg-slate-200", text: "text-slate-800", border: "border-slate-300" },
   V: { label: "Vacaciones", code: "V", hours: 7.0, bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300" },
   LD: { label: "Moscoso", code: "LD", hours: 7.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
@@ -209,6 +210,7 @@ export function syncCalendarMonthToTable(month) {
     if (shift === "M") mCount++;
     else if (shift === "T") tCount++;
     else if (shift === "N") nCount++;
+    else if (shift === "MN") { mCount++; nCount++; }
     else if (shift === "V") vCount++;
     else if (shift === "LD") ldCount++;
     else if (shift === "DCI") dciCount++;
@@ -254,32 +256,44 @@ export function syncTableMonthToCalendar(month) {
     }
   }
 
-  let idx = 0;
-
-  // A) Vacaciones (V)
-  for (let v = 0; v < row.vacaciones && idx < activeDays.length; v++) {
-    AppState.calendarShifts[activeDays[idx].dateStr] = "V";
-    idx++;
+  // A) Vacaciones (V) - En régimen diurno solo días laborables
+  let vAssigned = 0;
+  for (let i = 0; i < activeDays.length && vAssigned < row.vacaciones; i++) {
+    if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
+    if (!AppState.calendarShifts[activeDays[i].dateStr]) {
+      AppState.calendarShifts[activeDays[i].dateStr] = "V";
+      vAssigned++;
+    }
   }
 
-  // B) Moscosos (LD)
-  for (let ld = 0; ld < row.moscosos && idx < activeDays.length; ld++) {
-    AppState.calendarShifts[activeDays[idx].dateStr] = "LD";
-    idx++;
+  // B) Moscosos (LD) - En régimen diurno solo días laborables
+  let ldAssigned = 0;
+  for (let i = 0; i < activeDays.length && ldAssigned < row.moscosos; i++) {
+    if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
+    if (!AppState.calendarShifts[activeDays[i].dateStr]) {
+      AppState.calendarShifts[activeDays[i].dateStr] = "LD";
+      ldAssigned++;
+    }
   }
 
-  // C) Días DCI
-  for (let dci = 0; dci < dciDays && idx < activeDays.length; dci++) {
-    AppState.calendarShifts[activeDays[idx].dateStr] = "DCI";
-    idx++;
+  // C) Días DCI - En régimen diurno solo días laborables
+  let dciAssigned = 0;
+  for (let i = 0; i < activeDays.length && dciAssigned < dciDays; i++) {
+    if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
+    if (!AppState.calendarShifts[activeDays[i].dateStr]) {
+      AppState.calendarShifts[activeDays[i].dateStr] = "DCI";
+      dciAssigned++;
+    }
   }
 
-  // D) Noches (N) y Salientes (S)
+  // D) Noches (N)
   let nAssigned = 0;
-  for (let i = idx; i < activeDays.length - 1 && nAssigned < row.noches; i += 3) {
-    AppState.calendarShifts[activeDays[i].dateStr] = "N";
-    AppState.calendarShifts[activeDays[i + 1].dateStr] = "S";
-    nAssigned++;
+  for (let i = 0; i < activeDays.length && nAssigned < row.noches; i += 2) {
+    const dStr = activeDays[i].dateStr;
+    if (!AppState.calendarShifts[dStr]) {
+      AppState.calendarShifts[dStr] = "N";
+      nAssigned++;
+    }
   }
 
   // E) Tardes (T) en días aún vacíos
@@ -328,6 +342,7 @@ export function ensureTwoWaySync() {
       if (shift === "M") mCount++;
       else if (shift === "T") tCount++;
       else if (shift === "N") nCount++;
+      else if (shift === "MN") { mCount++; nCount++; }
       else if (shift === "V") vCount++;
       else if (shift === "LD") ldCount++;
       else if (shift === "DCI") dciCount++;
@@ -642,7 +657,7 @@ function renderCalendar() {
     grid.appendChild(cell);
   }
 
-  let mCount = 0, tCount = 0, nCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let mCount = 0, tCount = 0, nCount = 0, mnCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
 
   for (let day = 1; day <= daysInCurrentMonth; day++) {
     const dateStr = formatISODate(year, month, day);
@@ -653,6 +668,7 @@ function renderCalendar() {
       if (shiftCode === "M") mCount++;
       else if (shiftCode === "T") tCount++;
       else if (shiftCode === "N") nCount++;
+      else if (shiftCode === "MN") { mnCount++; mCount++; nCount++; }
       else if (shiftCode === "V") vCount++;
       else if (shiftCode === "LD") ldCount++;
       else if (shiftCode === "DCI") dciCount++;
@@ -686,6 +702,10 @@ function renderCalendar() {
       if (st.code === "N") {
         const hN = parseFloat(AppState.config.hoursN) || 10.0;
         hoursLabel = `+${hN}h`;
+      } else if (st.code === "MN") {
+        const hM = parseFloat(AppState.config.hoursM) || 7.0;
+        const hN = parseFloat(AppState.config.hoursN) || 10.0;
+        hoursLabel = `+${(hM + hN).toFixed(0)}h`;
       } else if (st.code === "DCI") {
         const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
         hoursLabel = `-${hDCI}h`;
@@ -750,6 +770,7 @@ function renderCalendar() {
     <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 font-mono">${mCount} M</span>
     <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-200 font-mono">${tCount} T</span>
     <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-200 font-mono">${nCount} N</span>
+    ${mnCount > 0 ? `<span class="px-2 py-0.5 rounded bg-fuchsia-100 text-fuchsia-950 border border-fuchsia-300 font-mono font-bold">${mnCount} MN (Doble)</span>` : ''}
     <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-200 font-mono">${vCount} V</span>
     <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200 font-mono">${ldCount} LD</span>
     <span class="px-2 py-0.5 rounded bg-cyan-100 text-cyan-900 border border-cyan-200 font-mono">${dciCount} DCI</span>
@@ -759,13 +780,32 @@ function renderCalendar() {
 function applyBrushToDate(dateStr) {
   if (!isDateInsideContract(dateStr)) return;
 
+  const d = parseISODate(dateStr);
+  const dayOfWeek = d.getDay(); // 0 = Domingo, 6 = Sábado
+  const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+
+  // Validación: En régimen diurno (L-V), no se pueden asignar vacaciones ni permisos en días no laborables
+  if (AppState.config.regime === "diurno" && isWeekend) {
+    if (AppState.activeBrush === "V") {
+      showToast("En régimen diurno (L-V), los sábados y domingos no son laborables. Las vacaciones no pueden registrarse en fines de semana.", "warning");
+      return;
+    }
+    if (AppState.activeBrush === "LD") {
+      showToast("En régimen diurno (L-V), los días de asuntos propios (LD) deben disfrutarse en días laborables ordinarios.", "warning");
+      return;
+    }
+    if (AppState.activeBrush === "DCI") {
+      showToast("En régimen diurno (L-V), los descansos DCI deben aplicarse en jornadas laborales ordinarias.", "warning");
+      return;
+    }
+  }
+
   if (AppState.activeBrush === "CLEAR") {
     delete AppState.calendarShifts[dateStr];
   } else {
     AppState.calendarShifts[dateStr] = AppState.activeBrush;
   }
 
-  const d = parseISODate(dateStr);
   syncCalendarMonthToTable(d.getMonth());
   updateAll();
 }
@@ -802,7 +842,6 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
-        <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-slate-100/40 cell-actual">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
         <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-accum">-</td>
@@ -831,7 +870,6 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-bold text-emerald-900">${row.vacaciones || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-purple-900">${row.moscosos || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dciHoras ? (row.dciHoras + 'h') : '0h'}</td>
-        <td class="py-2.5 px-2 text-center font-mono font-bold text-fuchsia-900">${row.guardias ? (row.guardias + 'h') : '0h'}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold bg-slate-100/70 text-slate-900 cell-actual">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold cell-balance">0.0</td>
         <td class="py-2.5 px-3 text-right font-mono font-black cell-accum">0.0 h</td>
@@ -947,7 +985,6 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono font-bold text-emerald-900">${totVacaciones}</td>
       <td class="py-3 px-2 font-mono font-bold text-purple-900">${totMoscosos}</td>
       <td class="py-3 px-2 font-mono font-bold text-cyan-900">${totDciHoras} h</td>
-      <td class="py-3 px-2 font-mono font-bold text-fuchsia-900">${totGuardias} h</td>
       <td class="py-3 px-2 font-mono font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono font-black ${ (totActualHours - totReqHours) >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
         ${finalSign}${(totActualHours - totReqHours).toFixed(1)} h
@@ -1262,17 +1299,17 @@ export function cargarDatosEjemplo(showNotification = true) {
 export function exportarCSV() {
   const year = AppState.calendarYear;
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Vacaciones;Moscosos (LD);DCI (h);Guardias (h);Horas Efectivas;Saldo Mes (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Vacaciones;Moscosos (LD);DCI (h);Horas Efectivas;Saldo Mes (h);Estado\r\n";
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
     const reqHours = getMonthRequiredHours(year, m);
     if (activeDays === 0) {
-      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0;0;0;0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
+      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0;0;0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
     } else {
       const actHours = getMonthActualHours(m);
       const monthBal = (actHours - reqHours).toFixed(1);
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${row.vacaciones};${row.moscosos};${row.dciHoras};${row.guardias};${actHours.toFixed(1)};${monthBal};Activo\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${row.vacaciones};${row.moscosos};${row.dciHoras};${actHours.toFixed(1)};${monthBal};Activo\r\n`;
     }
   });
 
@@ -1980,18 +2017,17 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnPrintTab = document.getElementById("btn-print-table");
   if (btnPrintTab) btnPrintTab.addEventListener("click", () => window.print());
 
-  // Atajos de teclado para turnos (M, T, N, S, V, L, D, G, X)
+  // Atajos de teclado para turnos (M, T, N, 2/B, V, L, D, X)
   window.addEventListener("keydown", (e) => {
     if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     const key = e.key.toUpperCase();
     if (key === "M") selectBrush("M");
     else if (key === "T") selectBrush("T");
     else if (key === "N") selectBrush("N");
-    else if (key === "S") selectBrush("S");
+    else if (key === "2" || key === "B") selectBrush("MN");
     else if (key === "V") selectBrush("V");
     else if (key === "L") selectBrush("LD");
     else if (key === "D") selectBrush("DCI");
-    else if (key === "G") selectBrush("G");
     else if (key === "X" || key === "DELETE" || key === "BACKSPACE") selectBrush("CLEAR");
   });
 
