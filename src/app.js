@@ -671,9 +671,11 @@ export function getAccumulatedMetrics() {
   }
 
   // Bolsa DCI (Exceso Real):
-  // Horas netas de exceso acumuladas por turnos de presencia física trabajados en días de descanso o dobletes,
-  // menos los días DCI ya consumidos. Conversión directa en días completos libres disponibles (Horas ÷ 7).
-  const dciNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
+  // Días DCI acumulados por exceso real de jornada SIN contar con las vacaciones.
+  // Las vacaciones justifican ausencia reglamentaria pero no computan como trabajo generador de DCI.
+  const vacationHoursConsumed = totalVacationConsumedDays * hV;
+  const dciRawHours = accumulatedBalance - vacationHoursConsumed;
+  const dciNetHours = dciRawHours > 0 ? parseFloat(dciRawHours.toFixed(1)) : 0.0;
   const dciDaysAvailable = Math.floor(dciNetHours / hDCI);
   const dciRemainderHours = parseFloat((dciNetHours % hDCI).toFixed(1));
   const dciExactDays = parseFloat((dciNetHours / hDCI).toFixed(1));
@@ -794,22 +796,22 @@ function renderKpis() {
   const dciSubEl = document.getElementById("kpi-dci-sub");
 
   if (dciHoursEl) {
-    const signDci = metrics.dciNetHours > 0 ? "+" : "";
-    dciHoursEl.textContent = `${signDci}${metrics.dciNetHours.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
+    const signDci = metrics.dciDaysAvailable > 0 ? "+" : "";
+    dciHoursEl.textContent = `${signDci}${metrics.dciDaysAvailable} Días`;
   }
   if (dciDaysEl) {
     dciDaysEl.textContent = `${metrics.dciDaysAvailable} Días`;
   }
   if (dciLabelEl) {
     if (metrics.dciNetHours > 0) {
-      dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">${metrics.dciDaysAvailable} días libres</span> disponibles (+${metrics.dciRemainderHours}h remanente)`;
+      dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">+${metrics.dciNetHours.toFixed(1)} h netas</span> (+${metrics.dciRemainderHours}h remanente)`;
     } else {
       dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Sin exceso de jornada acumulado" : "0 días libres disponibles (÷ 7h)";
     }
   }
   if (dciBadgeEl) {
-    dciBadgeEl.textContent = metrics.dciNetHours > 0 ? `+${metrics.dciDaysAvailable} d Libres` : "0 d Libres";
-    dciBadgeEl.className = metrics.dciNetHours > 0
+    dciBadgeEl.textContent = metrics.dciDaysAvailable > 0 ? `+${metrics.dciDaysAvailable} d Libres` : "0 d Libres";
+    dciBadgeEl.className = metrics.dciDaysAvailable > 0
       ? "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-cyan-100 text-cyan-800 shrink-0"
       : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
   }
@@ -838,7 +840,7 @@ function renderKpis() {
       : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
   }
   if (vacSubEl) {
-    vacSubEl.textContent = `Devengo: ${metrics.totalVacationDays} d según nombramiento (${metrics.contractDays} d)`;
+    vacSubEl.textContent = metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)";
   }
 
   // -------------------------------------------------------------
@@ -862,7 +864,7 @@ function renderKpis() {
       : "px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-bold bg-slate-100 text-slate-600 shrink-0";
   }
   if (ldSubEl) {
-    ldSubEl.textContent = `Devengo: ${metrics.totalLdDays} d según nombramiento (${metrics.contractDays} d)`;
+    ldSubEl.textContent = "";
   }
 }
 
@@ -1286,9 +1288,11 @@ function updateTableComputedCells() {
 
       const cellDciNet = tr.querySelector(".cell-dci-net");
       if (cellDciNet) {
-        if (runningAccumBalance > 0) {
-          const dciDays = Math.floor(runningAccumBalance / hDCI);
-          cellDciNet.textContent = `+${runningAccumBalance.toFixed(1)} h (${dciDays} d)`;
+        const accumVacHours = totVacaciones * hV;
+        const runningDciHours = Math.max(0, parseFloat((runningAccumBalance - accumVacHours).toFixed(1)));
+        if (runningDciHours > 0) {
+          const dciDays = Math.floor(runningDciHours / hDCI);
+          cellDciNet.textContent = `+${runningDciHours.toFixed(1)} h (${dciDays} d)`;
           cellDciNet.className = "py-2.5 px-3 text-right font-mono font-black text-cyan-900 bg-cyan-50/60 cell-dci-net";
         } else {
           cellDciNet.textContent = "0.0 h (0 d)";
@@ -1299,7 +1303,8 @@ function updateTableComputedCells() {
   });
 
   const accumSign = runningAccumBalance > 0 ? "+" : "";
-  const finalDciHours = runningAccumBalance > 0 ? runningAccumBalance : 0.0;
+  const totVacHours = totVacaciones * hV;
+  const finalDciHours = Math.max(0, parseFloat((runningAccumBalance - totVacHours).toFixed(1)));
   const finalDciDays = Math.floor(finalDciHours / hDCI);
 
   const tfoot = document.getElementById("gerhonte-table-totals");
@@ -1785,7 +1790,7 @@ export function exportarPDF() {
       label: "BOLSA VACACIONES",
       val: `${metrics.totalVacationConsumedDays} / ${metrics.totalVacationDays} d`,
       sub: `Restan ${metrics.remainingVacationDays} días por librar`,
-      sub2: `Según nombramiento (${metrics.contractDays} d)`,
+      sub2: metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)",
       color: [15, 23, 42],
       bg: [248, 250, 252]
     },
@@ -1793,7 +1798,7 @@ export function exportarPDF() {
       label: "BOLSA ASUNTOS PROPIOS (LD)",
       val: `${metrics.totalLdConsumedDays} / ${metrics.totalLdDays} d`,
       sub: `Restan ${metrics.remainingLdDays} días por librar`,
-      sub2: `Según nombramiento (${metrics.contractDays} d)`,
+      sub2: "",
       color: [88, 28, 135],
       bg: [250, 245, 255]
     }
@@ -1900,8 +1905,10 @@ export function exportarPDF() {
     const signMonth = monthBal > 0 ? "+" : "";
     const signAccum = runningAccum > 0 ? "+" : "";
 
-    const dciNetText = runningAccum > 0
-      ? `+${runningAccum.toFixed(1)} h (${Math.floor(runningAccum / hDCI)} d)`
+    const rowVacHours = totVacaciones * hV;
+    const rowDciHours = Math.max(0, parseFloat((runningAccum - rowVacHours).toFixed(1)));
+    const dciNetText = rowDciHours > 0
+      ? `+${rowDciHours.toFixed(1)} h (${Math.floor(rowDciHours / hDCI)} d)`
       : "0.0 h (0 d)";
 
     return [
@@ -1924,7 +1931,7 @@ export function exportarPDF() {
   });
 
   const totalAccumSign = runningAccum > 0 ? "+" : "";
-  const finalPdfDci = runningAccum > 0 ? runningAccum : 0.0;
+  const finalPdfDci = Math.max(0, parseFloat((runningAccum - (totVacaciones * hV)).toFixed(1)));
   const tableFoot = [[
     `TOTAL AUDITADO (${year})`,
     `${totActiveDays} d`,
@@ -2051,6 +2058,7 @@ export function exportarCSV() {
   csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);DCI Netos Pendientes (h);Estado\r\n";
 
   let runningAccum = 0;
+  let totVacaciones = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -2075,7 +2083,10 @@ export function exportarCSV() {
       const actHours = presHours + permHours - dciH;
       const monthBal = parseFloat((actHours - reqHours).toFixed(1));
       runningAccum += monthBal;
-      const dciNet = runningAccum > 0 ? runningAccum.toFixed(1) : "0.0";
+      totVacaciones += row.vacaciones || 0;
+      const rowVacHours = totVacaciones * hV;
+      const dciNetHours = Math.max(0, parseFloat((runningAccum - rowVacHours).toFixed(1)));
+      const dciNet = dciNetHours > 0 ? dciNetHours.toFixed(1) : "0.0";
       csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};${dciNet};Auditado\r\n`;
     }
   });
