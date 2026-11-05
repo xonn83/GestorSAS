@@ -33,7 +33,7 @@ Herramienta profesional diseñada para profesionales del **Servicio Andaluz de S
 5. **Persistencia Dual (Nube + Modo Local Seguro)**:
    - Sincronización en la nube mediante **Firebase Authentication** y **Cloud Firestore** con reglas de seguridad ABAC por usuario.
    - Modo local automático con `localStorage` ante desconexión o uso sin registro.
-   - Exportación de datos a hoja de cálculo en formato **CSV**.
+   - Exportación de informe oficial de auditoría y cuadrante en formato **PDF** (con membrete SAS, ficha del profesional y nombramiento, recuadros resumen de saldo/DCI y tabla mensual completa Gerhonte).
 
 ---
 

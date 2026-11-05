@@ -17,6 +17,8 @@ import {
   setDoc, 
   getDocFromServer 
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 // Configuración de Firebase (Firestore y Auth)
 const firebaseConfig = {
@@ -1396,6 +1398,379 @@ export function cargarDatosEjemplo(showNotification = true) {
   }
 }
 
+export function exportarPDF() {
+  const year = AppState.calendarYear;
+  const metrics = getAccumulatedMetrics();
+  const cfg = AppState.config || {};
+
+  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 12;
+  const contentWidth = pageWidth - (margin * 2);
+
+  // 1. Cabecera institucional
+  doc.setFillColor(6, 95, 70); // emerald-800
+  doc.rect(margin, 10, contentWidth, 2, "F");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(6, 95, 70);
+  doc.text("SERVICIO ANDALUZ DE SALUD  ·  CONSEJERÍA DE SALUD Y CONSUMO", margin, 17);
+
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42); // slate-900
+  doc.text("INFORME DE AUDITORÍA DE JORNADA Y BOLSA DCI", margin, 24);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(100, 116, 139); // slate-500
+  doc.text(`Control de Cómputo Horario y Ponderación Gerhonte · Ejercicio ${year}`, margin, 29);
+
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
+  const timeStr = now.toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit" });
+  doc.setFontSize(7.5);
+  doc.text(`Fecha de emisión: ${dateStr} ${timeStr}`, pageWidth - margin, 17, { align: "right" });
+  doc.text("Documento Informativo GestorSAS", pageWidth - margin, 21, { align: "right" });
+
+  // 2. Ficha de Datos del Profesional y Nombramiento Activo
+  const infoY = 32;
+  const infoH = 22;
+  doc.setFillColor(248, 250, 252);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(margin, infoY, contentWidth, infoH, 2, 2, "FD");
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(7);
+  doc.setTextColor(71, 85, 105);
+  doc.text("DATOS DEL PROFESIONAL Y NOMBRAMIENTO ACTIVO", margin + 3, infoY + 4.5);
+
+  doc.setFontSize(7.5);
+  const workerName = cfg.workerName ? cfg.workerName.trim() : "Personal SAS";
+  const dni = cfg.dni ? cfg.dni.trim() : "—";
+  const category = cfg.category ? cfg.category.trim() : "Personal Estatutario SAS";
+  const center = cfg.center ? cfg.center.trim() : "Centro Sanitario SAS";
+  const service = cfg.service ? cfg.service.trim() : "—";
+  const regimeText = cfg.regime === "rotatorio" ? "Turno Rotatorio (M/T/N)" : "Turno Diurno (Lunes a Viernes)";
+  const periodText = (cfg.startDate || cfg.endDate)
+    ? `${cfg.startDate || "Inicio año"} al ${cfg.endDate || "Fin año"}`
+    : `Año completo ${year}`;
+  const baseHoursText = `${cfg.baseHours || 1540} h anuales · Módulo DCI: ${cfg.hoursDCI || 7} h/día`;
+
+  // Fila 1
+  doc.setFont("helvetica", "bold");
+  doc.text("Profesional:", margin + 3, infoY + 9.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(workerName, margin + 20, infoY + 9.5);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("DNI / NIE:", margin + 80, infoY + 9.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(dni, margin + 96, infoY + 9.5);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Categoría:", margin + 124, infoY + 9.5);
+  doc.setFont("helvetica", "normal");
+  const catTruncated = category.length > 28 ? category.substring(0, 26) + "..." : category;
+  doc.text(catTruncated, margin + 140, infoY + 9.5);
+
+  // Fila 2
+  doc.setFont("helvetica", "bold");
+  doc.text("Centro:", margin + 3, infoY + 14.5);
+  doc.setFont("helvetica", "normal");
+  const centerTruncated = center.length > 32 ? center.substring(0, 30) + "..." : center;
+  doc.text(centerTruncated, margin + 15, infoY + 14.5);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Servicio:", margin + 80, infoY + 14.5);
+  doc.setFont("helvetica", "normal");
+  const serviceTruncated = service.length > 20 ? service.substring(0, 18) + "..." : service;
+  doc.text(serviceTruncated, margin + 94, infoY + 14.5);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Régimen:", margin + 124, infoY + 14.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(regimeText, margin + 140, infoY + 14.5);
+
+  // Fila 3
+  doc.setFont("helvetica", "bold");
+  doc.text("Periodo:", margin + 3, infoY + 19.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(periodText, margin + 16, infoY + 19.5);
+
+  doc.setFont("helvetica", "bold");
+  doc.text("Jornada Base:", margin + 80, infoY + 19.5);
+  doc.setFont("helvetica", "normal");
+  doc.text(baseHoursText, margin + 101, infoY + 19.5);
+
+  // 3. Recuadros Superiores de Resumen (KPIs)
+  const kpiY = 57;
+  const kpiH = 22;
+  const cardGap = 3;
+  const cardW = (contentWidth - (cardGap * 3)) / 4;
+
+  const balanceSign = metrics.accumulatedBalance > 0 ? "+" : "";
+  const balanceVal = `${balanceSign}${metrics.accumulatedBalance.toFixed(1)} h`;
+  const balanceState = metrics.filledMonthsCount === 0
+    ? "Sin registros"
+    : (metrics.accumulatedBalance > 0
+        ? "A FAVOR (Exceso)"
+        : (metrics.accumulatedBalance < 0 ? "DÉFICIT" : "AL DÍA"));
+  const balanceSub = metrics.filledMonthsCount === 0
+    ? `0h de ${metrics.totalContractReq.toFixed(0)}h`
+    : `Auditado a ${metrics.lastFilledMonthName || "mes"}`;
+  const balanceColor = metrics.accumulatedBalance > 0
+    ? [21, 128, 61]
+    : (metrics.accumulatedBalance < 0 ? [185, 28, 28] : [51, 65, 85]);
+  const balanceBg = metrics.accumulatedBalance > 0
+    ? [240, 253, 244]
+    : (metrics.accumulatedBalance < 0 ? [254, 242, 242] : [248, 250, 252]);
+
+  const cards = [
+    {
+      label: "SALDO BOLSA ACUMULADO",
+      val: balanceVal,
+      sub: balanceState,
+      sub2: balanceSub,
+      color: balanceColor,
+      bg: balanceBg
+    },
+    {
+      label: "DÍAS DCI DISPONIBLES",
+      val: `${metrics.dciDays} DÍAS`,
+      sub: metrics.accumulatedBalance > 0 ? `+${metrics.dciRemainderHours.toFixed(1)} h en bolsa` : "Sin exceso de jornada",
+      sub2: `Módulo: ${cfg.hoursDCI || 7} h/día`,
+      color: [4, 120, 87],
+      bg: [236, 253, 245]
+    },
+    {
+      label: `JORNADA EXIGIBLE (${year})`,
+      val: `${metrics.totalContractReq.toFixed(1)} h`,
+      sub: `Progreso: ${metrics.progressPercent}% (${metrics.totalWorkedAllYear.toFixed(1)} h)`,
+      sub2: `${metrics.totalActiveDaysInYear} días de contrato`,
+      color: [15, 23, 42],
+      bg: [248, 250, 252]
+    },
+    {
+      label: "TURNOS PENDIENTES",
+      val: `${metrics.remainingShifts} turnos`,
+      sub: `${metrics.remainingHoursAnnual.toFixed(1)} h restantes`,
+      sub2: "Para completar nombramiento",
+      color: [71, 85, 105],
+      bg: [248, 250, 252]
+    }
+  ];
+
+  cards.forEach((c, idx) => {
+    const x = margin + idx * (cardW + cardGap);
+    doc.setFillColor(...c.bg);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(x, kpiY, cardW, kpiH, 1.5, 1.5, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text(c.label, x + cardW / 2, kpiY + 4.5, { align: "center" });
+
+    doc.setFontSize(12);
+    doc.setTextColor(...c.color);
+    doc.text(c.val, x + cardW / 2, kpiY + 11.5, { align: "center" });
+
+    doc.setFontSize(6.5);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(51, 65, 85);
+    doc.text(c.sub, x + cardW / 2, kpiY + 16, { align: "center" });
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6);
+    doc.setTextColor(100, 116, 139);
+    doc.text(c.sub2, x + cardW / 2, kpiY + 19.5, { align: "center" });
+  });
+
+  // 4. Tabla de Auditoría Mensual Gerhonte (Pestaña 2)
+  let totActiveDays = 0;
+  let totReqHours = 0;
+  let totMananas = 0;
+  let totTardes = 0;
+  let totNoches = 0;
+  let totVacaciones = 0;
+  let totMoscosos = 0;
+  let totDciHoras = 0;
+  let totActualHours = 0;
+  let runningAccum = 0;
+
+  const tableBody = AppState.monthlyTableData.map((row, m) => {
+    const activeDays = getMonthActiveContractDays(year, m);
+    const reqHours = getMonthRequiredHours(year, m);
+
+    if (activeDays === 0) {
+      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "-", "-", "0 h", "0.0 h", "-", "-"];
+    }
+
+    const hasShifts = (
+      (row.mananas || 0) > 0 ||
+      (row.tardes || 0) > 0 ||
+      (row.noches || 0) > 0 ||
+      (row.vacaciones || 0) > 0 ||
+      (row.moscosos || 0) > 0 ||
+      ((row.dciHoras || 0) !== 0)
+    );
+
+    if (!hasShifts) {
+      return [
+        MONTH_NAMES[m],
+        `${activeDays} d`,
+        `${reqHours.toFixed(1)} h`,
+        "0", "0", "0", "0", "0",
+        "0 h",
+        "0.0 h",
+        "Pendiente",
+        "-"
+      ];
+    }
+
+    const actHours = getMonthActualHours(m);
+    const monthBal = parseFloat((actHours - reqHours).toFixed(1));
+
+    totActiveDays += activeDays;
+    totReqHours += reqHours;
+    totMananas += (row.mananas || 0);
+    totTardes += (row.tardes || 0);
+    totNoches += (row.noches || 0);
+    totVacaciones += (row.vacaciones || 0);
+    totMoscosos += (row.moscosos || 0);
+    totDciHoras += (row.dciHoras || 0);
+    totActualHours += actHours;
+    runningAccum += monthBal;
+
+    const signMonth = monthBal > 0 ? "+" : "";
+    const signAccum = runningAccum > 0 ? "+" : "";
+
+    return [
+      MONTH_NAMES[m],
+      `${activeDays} d`,
+      `${reqHours.toFixed(1)} h`,
+      String(row.mananas || 0),
+      String(row.tardes || 0),
+      String(row.noches || 0),
+      String(row.vacaciones || 0),
+      String(row.moscosos || 0),
+      row.dciHoras ? `${row.dciHoras} h` : "0 h",
+      `${actHours.toFixed(1)} h`,
+      `${signMonth}${monthBal.toFixed(1)} h`,
+      `${signAccum}${runningAccum.toFixed(1)} h`
+    ];
+  });
+
+  const totalAccumSign = runningAccum > 0 ? "+" : "";
+  const tableFoot = [[
+    `TOTAL AUDITADO (${year})`,
+    `${totActiveDays} d`,
+    `${totReqHours.toFixed(1)} h`,
+    String(totMananas),
+    String(totTardes),
+    String(totNoches),
+    String(totVacaciones),
+    String(totMoscosos),
+    `${totDciHoras} h`,
+    `${totActualHours.toFixed(1)} h`,
+    `${totalAccumSign}${runningAccum.toFixed(1)} h`,
+    `${totalAccumSign}${runningAccum.toFixed(1)} h`
+  ]];
+
+  autoTable(doc, {
+    startY: 82,
+    margin: { left: margin, right: margin },
+    head: [["Mes", "Días", "Cuota (h)", "M", "T", "N", "V", "LD", "DCI", "Efectivas", "Saldo Mes", "Saldo Acum."]],
+    body: tableBody,
+    foot: tableFoot,
+    theme: "grid",
+    styles: {
+      font: "helvetica",
+      fontSize: 7.5,
+      cellPadding: 1.6,
+      halign: "center",
+      valign: "middle",
+      textColor: [30, 41, 59],
+      lineColor: [226, 232, 240],
+      lineWidth: 0.15
+    },
+    headStyles: {
+      fillColor: [15, 23, 42],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      fontSize: 7.5,
+      halign: "center"
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: [15, 23, 42],
+      fontStyle: "bold",
+      fontSize: 7.5,
+      halign: "center"
+    },
+    columnStyles: {
+      0: { halign: "left", fontStyle: "bold", cellWidth: 26 },
+      1: { cellWidth: 14 },
+      2: { cellWidth: 17 },
+      3: { cellWidth: 11, fontStyle: "bold" },
+      4: { cellWidth: 11, fontStyle: "bold" },
+      5: { cellWidth: 11, fontStyle: "bold" },
+      6: { cellWidth: 11, fontStyle: "bold" },
+      7: { cellWidth: 11, fontStyle: "bold" },
+      8: { cellWidth: 13, fontStyle: "bold" },
+      9: { cellWidth: 18, fontStyle: "bold" },
+      10: { cellWidth: 18, fontStyle: "bold" },
+      11: { cellWidth: 25, fontStyle: "bold", halign: "right" }
+    },
+    didParseCell: function(data) {
+      if (data.section === "body") {
+        const text = data.cell.raw || "";
+        if (data.column.index === 10 || data.column.index === 11) {
+          if (typeof text === "string" && text.startsWith("+")) {
+            data.cell.styles.textColor = [21, 128, 61];
+          } else if (typeof text === "string" && text.startsWith("-") && text !== "-") {
+            data.cell.styles.textColor = [185, 28, 28];
+          } else if (text === "-" || text === "Pendiente") {
+            data.cell.styles.textColor = [148, 163, 184];
+          }
+        }
+      }
+    }
+  });
+
+  const finalY = doc.lastAutoTable.finalY + 4;
+
+  // 5. Firma y notas legales
+  if (finalY + 30 <= pageHeight - margin) {
+    const sigY = finalY + 4;
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineDashPattern([1, 1], 0);
+    doc.line(margin + 15, sigY + 12, margin + 70, sigY + 12);
+    doc.line(pageWidth - margin - 70, sigY + 12, pageWidth - margin - 15, sigY + 12);
+    doc.setLineDashPattern([], 0);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Firma / Conforme del Profesional", margin + 42.5, sigY + 16, { align: "center" });
+    doc.text("Validación Unidad de Personal / Supervisión", pageWidth - margin - 42.5, sigY + 16, { align: "center" });
+
+    const legalY = sigY + 22;
+    doc.setFontSize(6.5);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Nota técnica: Cómputo realizado conforme a la Orden de Jornada y Horarios del SAS y tabla de ponderación horaria Gerhonte.", margin, legalY);
+    doc.text("Documento justificativo emitido automáticamente por GestorSAS para el control del saldo horario y días de compensación (DCI).", margin, legalY + 3.5);
+    doc.text("Página 1 de 1 · GestorSAS v2.0", pageWidth - margin, legalY + 3.5, { align: "right" });
+  }
+
+  // Descarga del PDF
+  const safeName = (cfg.workerName || "personal_sas").toLowerCase().replace(/[^a-z0-9]/g, "_").replace(/_+/g, "_");
+  doc.save(`auditoria_jornada_sas_${year}_${safeName}.pdf`);
+  showToast("Informe de auditoría descargado en PDF correctamente", "success");
+}
+
 export function exportarCSV() {
   const year = AppState.calendarYear;
   let csvContent = "data:text/csv;charset=utf-8,";
@@ -2069,7 +2444,14 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
-  if (btnExportCsv) btnExportCsv.addEventListener("click", exportarCSV);
+  const btnExportPdf = document.getElementById("btn-export-pdf");
+  if (btnExportPdf) {
+    btnExportPdf.addEventListener("click", exportarPDF);
+  }
+  const btnExportCsv = document.getElementById("btn-export-csv");
+  if (btnExportCsv) {
+    btnExportCsv.addEventListener("click", exportarPDF);
+  }
 
   // Slider DCI
   const slider = document.getElementById("slider-dci");
