@@ -2,23 +2,45 @@
  * Gestor de Cuadrante y Auditor de Jornada SAS (Gerhonte)
  * Motor de Cálculo, Autenticación y Sincronización en la Nube
  */
-import { initializeApp } from 'firebase/app';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged 
-} from 'firebase/auth';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 import { 
   getFirestore, 
   doc, 
   getDoc, 
   setDoc, 
   getDocFromServer 
-} from 'firebase/firestore';
-import { jsPDF } from 'jspdf';
-import autoTable from 'jspdf-autotable';
+} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+
+// Acceso universal a motor de generación PDF (jsPDF + autoTable) sin especificadores huérfanos
+function getJsPdfClass() {
+  if (typeof window !== "undefined") {
+    if (window.jspdf && window.jspdf.jsPDF) return window.jspdf.jsPDF;
+    if (window.jsPDF) return window.jsPDF;
+  }
+  return null;
+}
+
+function applyAutoTable(doc, options) {
+  if (typeof doc.autoTable === 'function') {
+    return doc.autoTable(options);
+  }
+  if (typeof window !== "undefined") {
+    if (window.jspdf && typeof window.jspdf.autoTable === 'function') {
+      return window.jspdf.autoTable(doc, options);
+    }
+    if (typeof window.autoTable === 'function') {
+      return window.autoTable(doc, options);
+    }
+  }
+  console.warn("Plugin autoTable no disponible");
+}
 
 // Configuración de Firebase (Firestore y Auth)
 const firebaseConfig = {
@@ -1609,11 +1631,16 @@ export function cargarDatosEjemplo(showNotification = true) {
 }
 
 export function exportarPDF() {
+  const JsPdfClass = getJsPdfClass();
+  if (!JsPdfClass) {
+    showToast("Error: No se ha podido cargar el módulo PDF. Comprueba tu conexión a Internet.", "danger");
+    return;
+  }
   const year = AppState.calendarYear;
   const metrics = getAccumulatedMetrics();
   const cfg = AppState.config || {};
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
+  const doc = new JsPdfClass({ orientation: "portrait", unit: "mm", format: "a4" });
   const pageWidth = 210;
   const pageHeight = 297;
   const margin = 12;
@@ -1916,7 +1943,7 @@ export function exportarPDF() {
     `+${finalPdfDci.toFixed(1)} h (${Math.floor(finalPdfDci / hDCI)} d)`
   ]];
 
-  autoTable(doc, {
+  applyAutoTable(doc, {
     startY: 82,
     margin: { left: margin, right: margin },
     head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "LD", "Perm.", "DCI", "Efect.", "Saldo", "Acum.", "DCI Pend."]],
@@ -1980,7 +2007,7 @@ export function exportarPDF() {
     }
   });
 
-  const finalY = doc.lastAutoTable.finalY + 4;
+  const finalY = (doc.lastAutoTable && doc.lastAutoTable.finalY) ? doc.lastAutoTable.finalY + 4 : 200;
 
   // 5. Firma y notas legales
   if (finalY + 30 <= pageHeight - margin) {
