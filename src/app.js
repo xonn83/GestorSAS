@@ -2,21 +2,21 @@
  * Gestor de Cuadrante y Auditor de Jornada SAS (Gerhonte)
  * Motor de Cálculo, Autenticación y Sincronización en la Nube
  */
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
+import { initializeApp } from 'firebase/app';
 import { 
   getAuth, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword, 
   signOut, 
   onAuthStateChanged 
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+} from 'firebase/auth';
 import { 
   getFirestore, 
   doc, 
   getDoc, 
   setDoc, 
   getDocFromServer 
-} from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js';
+} from 'firebase/firestore';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -2121,9 +2121,12 @@ export function showModal(title, message, onConfirm) {
 }
 
 // -------------------------------------------------------------
-// EVENTOS PRINCIPALES DEL DOM
+// EVENTOS PRINCIPALES DEL DOM (Inicialización Resiliente)
 // -------------------------------------------------------------
-document.addEventListener("DOMContentLoaded", () => {
+let appInitialized = false;
+function initApp() {
+  if (appInitialized) return;
+  appInitialized = true;
   const authPortal = document.getElementById("auth-portal");
   const formLogin = document.getElementById("form-login");
   const formRegister = document.getElementById("form-register");
@@ -2266,32 +2269,35 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         submitBtn.disabled = true;
         submitBtn.textContent = "Verificando acceso...";
-        await signInWithEmailAndPassword(auth, email, password);
+        if (auth) {
+          await signInWithEmailAndPassword(auth, email, password);
+        } else {
+          throw new Error("No hay conexión con el servicio de autenticación");
+        }
       } catch (err) {
-        console.error("Login Error:", err);
-        let friendly = "Error de acceso: ";
+        console.warn("Login Error / Offline Fallback Check:", err);
         const savedAcc = getLocalAccount(email);
 
-        if (err.code === "auth/operation-not-allowed" || err.code === "auth/unauthorized-domain") {
-          if (savedAcc && savedAcc.password === password) {
-            activateUserSession(savedAcc);
-            showToast("¡Sesión iniciada correctamente!", "success");
-            return;
-          }
-          if (err.code === "auth/unauthorized-domain") {
-            friendly = `Dominio '${window.location.hostname}' no autorizado en Firebase. Añádelo en Firebase Console > Authentication > Settings > Authorized Domains, o regístrate abajo.`;
-          } else {
-            friendly = `Para acceder con Firebase, habilita 'Correo/Contraseña' en la consola del proyecto ${firebaseConfig.projectId}. O regístrate de nuevo abajo.`;
-          }
+        // Si la cuenta existe en almacenamiento local y la clave coincide, dar acceso inmediato:
+        if (savedAcc && savedAcc.password === password) {
+          activateUserSession(savedAcc);
+          showToast("¡Sesión iniciada correctamente!", "success");
+          return;
+        }
+
+        let friendly = "Error de acceso: ";
+        if (savedAcc && savedAcc.password !== password) {
+          friendly = "Contraseña incorrecta para este usuario.";
         } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
-          if (savedAcc && savedAcc.password === password) {
-            activateUserSession(savedAcc);
-            showToast("¡Sesión iniciada correctamente!", "success");
-            return;
-          }
-          friendly = "Usuario o contraseña incorrectos.";
+          friendly = "Usuario o contraseña no válidos. Si no tienes cuenta aún en este dispositivo, pulsa 'Nuevo Registro'.";
         } else if (err.code === "auth/too-many-requests") {
           friendly = "Demasiados intentos. Espera unos momentos.";
+        } else if (err.code === "auth/unauthorized-domain") {
+          friendly = `Dominio '${window.location.hostname}' no autorizado en Firebase. Regístrate en 'Nuevo Registro' para activar el gestor en este dispositivo.`;
+        } else if (err.code === "auth/operation-not-allowed") {
+          friendly = `El método de acceso por correo no está habilitado en Firebase (${firebaseConfig.projectId}). Regístrate en 'Nuevo Registro'.`;
+        } else if (err.code === "auth/network-request-failed") {
+          friendly = "Error de red al conectar con Firebase. Si aún no te has registrado en este dispositivo, pulsa 'Nuevo Registro'.";
         } else {
           friendly += (err.message || "revisa los datos introducidos");
         }
@@ -2332,8 +2338,25 @@ document.addEventListener("DOMContentLoaded", () => {
         submitBtn.disabled = true;
         submitBtn.textContent = "Registrando profesional...";
 
-        const userCred = await createUserWithEmailAndPassword(auth, email, password);
-        const user = userCred.user;
+        let user = null;
+        if (auth) {
+          try {
+            const userCred = await createUserWithEmailAndPassword(auth, email, password);
+            user = userCred.user;
+          } catch (authErr) {
+            console.warn("Firebase Auth Register warning:", authErr);
+            if (authErr.code === "auth/email-already-in-use") {
+              showAuthError("Este correo ya está registrado en Firebase. Inicia sesión directamente.");
+              return;
+            }
+            if (authErr.code === "auth/weak-password") {
+              showAuthError("La contraseña debe tener al menos 6 caracteres.");
+              return;
+            }
+            // En caso de auth/unauthorized-domain, auth/operation-not-allowed o red offline,
+            // continuamos creando y activando la cuenta localmente para que el usuario nunca se quede bloqueado.
+          }
+        }
 
         AppState.config.workerName = name;
         AppState.config.dni = dni;
@@ -2345,121 +2368,76 @@ document.addEventListener("DOMContentLoaded", () => {
         AppState.config.regime = regime;
         AppState.config.baseHours = baseHours;
 
-        if (db) {
-          await setDoc(doc(db, "users", user.uid), {
-            userId: user.uid,
-            email: email,
-            workerName: name,
-            category: category,
-            center: center,
-            service: "Servicio Sanitario SAS",
-            dni: dni,
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          });
+        const uid = user ? user.uid : ("usr_" + Math.random().toString(36).substring(2, 10));
+        const accountData = {
+          uid: uid,
+          email: email,
+          password: password,
+          name: name,
+          dni: dni,
+          category: category,
+          center: center,
+          service: "Servicio Sanitario SAS",
+          startDate: startDate,
+          endDate: endDate,
+          regime: regime,
+          baseHours: baseHours
+        };
+        saveLocalAccount(accountData);
 
-          await setDoc(doc(db, "users", user.uid, "data", "cuadrante"), {
-            userId: user.uid,
-            startDate: startDate,
-            endDate: endDate,
-            regime: regime,
-            baseHours: baseHours,
-            hoursM: 7.0,
-            hoursT: 7.0,
-            hoursN: 10.0,
-            hoursS: 0.0,
-            hoursV: 7.0,
-            hoursLD: 7.0,
-            hoursDCI: 7.0,
-            proposedDates: "",
-            calendarShifts: {},
-            monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
-              month: i,
-              mananas: 0,
-              tardes: 0,
-              noches: 0,
-              vacaciones: 0,
-              moscosos: 0,
-              dciHoras: 0,
-              guardias: 0,
-              isManual: false
-            })),
-            calendarYear: parseISODate(startDate).getFullYear(),
-            updatedAt: new Date().toISOString()
-          });
+        if (user && db) {
+          try {
+            await setDoc(doc(db, "users", user.uid), {
+              userId: user.uid,
+              email: email,
+              workerName: name,
+              category: category,
+              center: center,
+              service: "Servicio Sanitario SAS",
+              dni: dni,
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            });
+
+            await setDoc(doc(db, "users", user.uid, "data", "cuadrante"), {
+              userId: user.uid,
+              startDate: startDate,
+              endDate: endDate,
+              regime: regime,
+              baseHours: baseHours,
+              hoursM: 7.0,
+              hoursT: 7.0,
+              hoursN: 10.0,
+              hoursS: 0.0,
+              hoursV: 7.0,
+              hoursLD: 7.0,
+              hoursDCI: 7.0,
+              proposedDates: "",
+              calendarShifts: {},
+              monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
+                month: i,
+                mananas: 0,
+                tardes: 0,
+                noches: 0,
+                vacaciones: 0,
+                moscosos: 0,
+                dciHoras: 0,
+                guardias: 0,
+                isManual: false
+              })),
+              calendarYear: parseISODate(startDate).getFullYear(),
+              updatedAt: new Date().toISOString()
+            });
+          } catch (syncErr) {
+            console.warn("Firestore save warning:", syncErr);
+          }
         }
 
+        activateUserSession(accountData);
         showToast("¡Registro completado con éxito! Bienvenido/a a tu cuadrante.", "success");
       } catch (err) {
         console.error("Register Error:", err);
-        let friendly = "Error de registro: ";
-
-        if (err.code === "auth/operation-not-allowed" || err.code === "auth/unauthorized-domain") {
-          const localUid = "usr_" + Math.random().toString(36).substring(2, 10);
-          const accountData = {
-            uid: localUid,
-            email: email,
-            password: password,
-            name: name,
-            dni: dni,
-            category: category,
-            center: center,
-            service: "Servicio Sanitario SAS",
-            startDate: startDate,
-            endDate: endDate,
-            regime: regime,
-            baseHours: baseHours
-          };
-          saveLocalAccount(accountData);
-
-          const isUnauth = err.code === "auth/unauthorized-domain";
-          const title = isUnauth 
-            ? `Dominio '${window.location.hostname}' pendiente de autorizar en Firebase`
-            : "Método 'Correo/Contraseña' pendiente en Firebase";
-          const desc = isUnauth
-            ? `Para sincronizar en la nube desde este dominio (${window.location.hostname}), agrégalo en Firebase Console > Authentication > Settings > Authorized Domains. Puedes acceder y usar la app inmediatamente en este dispositivo.`
-            : `El proyecto de Firebase <strong>${firebaseConfig.projectId}</strong> requiere activar por única vez el método de inicio de sesión en su consola.`;
-          const actionLink = isUnauth
-            ? `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/settings`
-            : `https://console.firebase.google.com/project/${firebaseConfig.projectId}/authentication/providers`;
-
-          const bannerHtml = `
-            <div class="space-y-2.5 text-left py-1">
-              <div class="font-bold flex items-center gap-1.5 text-amber-900 text-xs">
-                <svg class="w-4 h-4 text-amber-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
-                <span>${title}</span>
-              </div>
-              <p class="text-slate-600 text-[11px] leading-relaxed">
-                ${desc}
-              </p>
-              <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-                <a href="${actionLink}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-[11px] transition-colors shadow-xs">
-                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
-                  <span>Abrir Consola Firebase</span>
-                </a>
-                <button type="button" id="btn-activate-account-now" class="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300 font-bold text-[11px] transition-colors cursor-pointer shadow-2xs">
-                  <span>Acceder con mi usuario ahora</span>
-                </button>
-              </div>
-            </div>
-          `;
-          showAuthErrorHtml(bannerHtml);
-
-          const btnAct = document.getElementById("btn-activate-account-now");
-          if (btnAct) {
-            btnAct.onclick = () => {
-              activateUserSession(accountData);
-            };
-          }
-          return;
-        } else if (err.code === "auth/email-already-in-use") {
-          friendly = "Este correo ya está registrado. Inicia sesión.";
-        } else if (err.code === "auth/weak-password") {
-          friendly = "La contraseña debe tener al menos 6 caracteres.";
-        } else {
-          friendly += (err.message || "revisa los datos");
-        }
-        showAuthError(friendly);
+        showAuthError("Error de registro: " + (err.message || "revisa los datos"));
       } finally {
         submitBtn.disabled = false;
         submitBtn.innerHTML = `
@@ -2782,4 +2760,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const btn = document.querySelector(`.brush-btn[data-brush="${brushCode}"]`);
     if (btn) btn.click();
   }
-});
+}
+
+// Inicialización inmediata o al completar la carga del DOM
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initApp);
+} else {
+  initApp();
+}
