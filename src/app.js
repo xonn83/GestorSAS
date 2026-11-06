@@ -92,7 +92,7 @@ export const AppState = {
   },
   calendarYear: currentYear,
   calendarMonth: currentMonth,
-  activeBrush: "M",
+  activeBrush: null,
   calendarShifts: {},
   monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
     month: i,
@@ -125,6 +125,86 @@ const SHIFT_TYPES = {
   DCI: { label: "Día DCI", code: "DCI", hours: -7.0, bg: "bg-cyan-100", text: "text-cyan-900", border: "border-cyan-400" },
   G: { label: "Guardia", code: "G", hours: 0.0, bg: "bg-fuchsia-100", text: "text-fuchsia-900", border: "border-fuchsia-300" }
 };
+
+const BRUSH_CONFIG = {
+  M: {
+    inactiveClasses: ["bg-amber-50", "text-amber-800", "border-amber-200", "hover:bg-amber-100"],
+    activeClasses: ["bg-amber-200", "text-amber-950", "border-amber-500", "ring-2", "ring-amber-500", "font-black", "shadow-xs"]
+  },
+  T: {
+    inactiveClasses: ["bg-orange-50", "text-orange-800", "border-orange-200", "hover:bg-orange-100"],
+    activeClasses: ["bg-orange-200", "text-orange-950", "border-orange-500", "ring-2", "ring-orange-500", "font-black", "shadow-xs"]
+  },
+  N: {
+    inactiveClasses: ["bg-indigo-50", "text-indigo-800", "border-indigo-200", "hover:bg-indigo-100"],
+    activeClasses: ["bg-indigo-200", "text-indigo-950", "border-indigo-500", "ring-2", "ring-indigo-500", "font-black", "shadow-xs"]
+  },
+  MN: {
+    inactiveClasses: ["bg-fuchsia-50", "text-fuchsia-900", "border-fuchsia-200", "hover:bg-fuchsia-100"],
+    activeClasses: ["bg-fuchsia-200", "text-fuchsia-950", "border-fuchsia-500", "ring-2", "ring-fuchsia-500", "font-black", "shadow-xs"]
+  },
+  V: {
+    inactiveClasses: ["bg-emerald-50", "text-emerald-800", "border-emerald-200", "hover:bg-emerald-100"],
+    activeClasses: ["bg-emerald-200", "text-emerald-950", "border-emerald-500", "ring-2", "ring-emerald-500", "font-black", "shadow-xs"]
+  },
+  LD: {
+    inactiveClasses: ["bg-purple-50", "text-purple-800", "border-purple-200", "hover:bg-purple-100"],
+    activeClasses: ["bg-purple-200", "text-purple-950", "border-purple-500", "ring-2", "ring-purple-500", "font-black", "shadow-xs"]
+  },
+  DCI: {
+    inactiveClasses: ["bg-cyan-50", "text-cyan-800", "border-cyan-200", "hover:bg-cyan-100"],
+    activeClasses: ["bg-cyan-200", "text-cyan-950", "border-cyan-500", "ring-2", "ring-cyan-500", "font-black", "shadow-xs"]
+  },
+  CLEAR: {
+    inactiveClasses: ["border-rose-200", "text-rose-700", "hover:bg-rose-50"],
+    activeClasses: ["bg-rose-200", "text-rose-950", "border-rose-500", "ring-2", "ring-rose-500", "font-black", "shadow-xs"]
+  }
+};
+
+export function clearActiveBrush() {
+  AppState.activeBrush = null;
+  document.querySelectorAll(".brush-btn").forEach(btn => {
+    const code = btn.dataset.brush;
+    const cfg = BRUSH_CONFIG[code];
+    if (cfg) {
+      btn.classList.remove(...cfg.activeClasses);
+      btn.classList.add(...cfg.inactiveClasses);
+    }
+  });
+}
+
+export function setActiveBrush(brushCode) {
+  clearActiveBrush();
+  AppState.activeBrush = brushCode;
+  const btn = document.querySelector(`.brush-btn[data-brush="${brushCode}"]`);
+  const cfg = BRUSH_CONFIG[brushCode];
+  if (btn && cfg) {
+    btn.classList.remove(...cfg.inactiveClasses);
+    btn.classList.add(...cfg.activeClasses);
+  }
+}
+
+export function getShiftDescription(code) {
+  if (!code) return "Sin turno";
+  if (code === "CLEAR") return "Borrar turno";
+  const st = SHIFT_TYPES[code];
+  if (!st) return code;
+  let hoursText = "";
+  if (st.code === "N") {
+    const hN = parseFloat(AppState.config.hoursN) || 10.0;
+    hoursText = ` (+${hN}h)`;
+  } else if (st.code === "MN") {
+    const hM = parseFloat(AppState.config.hoursM) || 7.0;
+    const hN = parseFloat(AppState.config.hoursN) || 10.0;
+    hoursText = ` (+${(hM + hN).toFixed(0)}h)`;
+  } else if (st.code === "DCI") {
+    const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
+    hoursText = ` (-${hDCI.toFixed(0)}h)`;
+  } else if (st.hours) {
+    hoursText = ` (${st.hours > 0 ? '+' : ''}${st.hours}h)`;
+  }
+  return `[${st.code}] ${st.label}${hoursText}`;
+}
 
 // Utilidades
 function isLeapYear(year) {
@@ -996,11 +1076,18 @@ function renderCalendar() {
 function applyBrushToDate(dateStr) {
   if (!isDateInsideContract(dateStr)) return;
 
+  // 1. Si no hay ningún turno seleccionado, evitar cualquier modificación por descuido y avisar al usuario
+  if (!AppState.activeBrush) {
+    showToast("Selecciona primero un turno o la opción Borrar en la botonera superior", "info");
+    return;
+  }
+
   const d = parseISODate(dateStr);
   const dayOfWeek = d.getDay(); // 0 = Domingo, 6 = Sábado
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+  const currentShift = AppState.calendarShifts[dateStr];
 
-  // Validación: En régimen diurno (L-V), no se pueden asignar vacaciones ni permisos en días no laborables
+  // 2. Validación: En régimen diurno (L-V), no se pueden asignar vacaciones ni permisos en días no laborables
   if (AppState.config.regime === "diurno" && isWeekend) {
     if (AppState.activeBrush === "V") {
       showToast("En régimen diurno (L-V), los sábados y domingos no son laborables. Las vacaciones no pueden registrarse en fines de semana.", "warning");
@@ -1016,12 +1103,66 @@ function applyBrushToDate(dateStr) {
     }
   }
 
+  const dateFormatted = `${d.getDate()} de ${MONTH_NAMES[d.getMonth()]} de ${d.getFullYear()}`;
+
+  // 3. Caso: Borrar turno (CLEAR)
   if (AppState.activeBrush === "CLEAR") {
-    delete AppState.calendarShifts[dateStr];
-  } else {
-    AppState.calendarShifts[dateStr] = AppState.activeBrush;
+    if (!currentShift) {
+      showToast(`El día ${dateFormatted} ya está libre (sin turno asignado)`, "info");
+      return;
+    }
+
+    const oldDesc = getShiftDescription(currentShift);
+    showModal(
+      "¿Borrar turno registrado?",
+      `El día <strong>${dateFormatted}</strong> tiene asignado un turno de <strong>${oldDesc}</strong>.<br><br>¿Deseas eliminar este turno y dejar el día libre?`,
+      () => {
+        delete AppState.calendarShifts[dateStr];
+        syncCalendarMonthToTable(d.getMonth());
+        updateAll();
+        showToast(`Turno del ${dateFormatted} borrado correctamente`, "info");
+      },
+      {
+        confirmText: "Borrar turno",
+        cancelText: "Cancelar",
+        confirmClass: "bg-rose-600 hover:bg-rose-700",
+        iconClass: "text-rose-600"
+      }
+    );
+    return;
   }
 
+  // 4. Caso: Mismo turno ya registrado en esa fecha
+  if (currentShift === AppState.activeBrush) {
+    return;
+  }
+
+  // 5. Caso: Sobreescribir una casilla que ya tiene OTRO turno previamente grabado
+  if (currentShift && currentShift !== AppState.activeBrush) {
+    const oldDesc = getShiftDescription(currentShift);
+    const newDesc = getShiftDescription(AppState.activeBrush);
+
+    showModal(
+      "¿Cambiar turno del día?",
+      `El día <strong>${dateFormatted}</strong> ya tiene asignado un turno de <strong>${oldDesc}</strong>.<br><br>¿Deseas sustituirlo por el turno de <strong>${newDesc}</strong>?`,
+      () => {
+        AppState.calendarShifts[dateStr] = AppState.activeBrush;
+        syncCalendarMonthToTable(d.getMonth());
+        updateAll();
+        showToast(`Turno del ${dateFormatted} actualizado a [${AppState.activeBrush}]`, "success");
+      },
+      {
+        confirmText: "Cambiar turno",
+        cancelText: "Cancelar",
+        confirmClass: "bg-amber-600 hover:bg-amber-700",
+        iconClass: "text-amber-600"
+      }
+    );
+    return;
+  }
+
+  // 6. Caso: Casilla vacía -> asignar directamente sin popup
+  AppState.calendarShifts[dateStr] = AppState.activeBrush;
   syncCalendarMonthToTable(d.getMonth());
   updateAll();
 }
@@ -1098,6 +1239,7 @@ function renderTable() {
       `;
 
       tr.addEventListener("click", () => {
+        clearActiveBrush();
         AppState.calendarMonth = m;
         const calTab = document.querySelector('.tab-btn[data-tab="calendar"]');
         if (calTab) calTab.click();
@@ -2112,21 +2254,59 @@ export function showToast(message, type = "info") {
   }, 3500);
 }
 
-export function showModal(title, message, onConfirm) {
+export function showModal(title, message, onConfirm, options = {}) {
   const modal = document.getElementById("modal-container");
   const titleEl = document.getElementById("modal-title");
   const msgEl = document.getElementById("modal-message");
   const btnConfirm = document.getElementById("modal-btn-confirm");
   const btnCancel = document.getElementById("modal-btn-cancel");
+  const iconWrapper = document.getElementById("modal-icon-wrapper");
+  if (!modal || !titleEl || !msgEl || !btnConfirm || !btnCancel) return;
+
+  const {
+    confirmText = "Confirmar",
+    cancelText = "Cancelar",
+    confirmClass = "bg-rose-600 hover:bg-rose-700",
+    iconClass = "text-amber-600",
+    onCancel = null
+  } = options;
 
   titleEl.textContent = title;
-  msgEl.textContent = message;
+  msgEl.innerHTML = message;
+  btnConfirm.textContent = confirmText;
+  btnCancel.textContent = cancelText;
+  btnConfirm.className = `px-4 py-2 text-sm font-semibold text-white rounded-lg shadow-sm transition-colors cursor-pointer ${confirmClass}`;
+
+  if (iconWrapper) {
+    iconWrapper.className = `flex items-center gap-3 mb-3 ${iconClass}`;
+  }
+
   modal.classList.remove("hidden");
 
+  let isCleanedUp = false;
   const cleanup = () => {
+    if (isCleanedUp) return;
+    isCleanedUp = true;
     modal.classList.add("hidden");
     btnConfirm.onclick = null;
     btnCancel.onclick = null;
+    modal.onclick = null;
+    window.removeEventListener("keydown", onKeyDown);
+  };
+
+  const onKeyDown = (e) => {
+    if (e.key === "Escape") {
+      cleanup();
+      if (onCancel) onCancel();
+    }
+  };
+  window.addEventListener("keydown", onKeyDown);
+
+  modal.onclick = (e) => {
+    if (e.target === modal) {
+      cleanup();
+      if (onCancel) onCancel();
+    }
   };
 
   btnConfirm.onclick = () => {
@@ -2136,6 +2316,7 @@ export function showModal(title, message, onConfirm) {
 
   btnCancel.onclick = () => {
     cleanup();
+    if (onCancel) onCancel();
   };
 }
 
@@ -2576,7 +2757,10 @@ function initApp() {
       const activePanel = document.getElementById(`tab-${target}`);
       if (activePanel) activePanel.classList.remove("hidden");
 
-      if (target === "calendar") renderCalendar();
+      if (target === "calendar") {
+        clearActiveBrush();
+        renderCalendar();
+      }
       if (target === "table") renderTable();
       if (target === "projection") renderProjection();
       if (target === "request") renderRequestLetter();
@@ -2587,13 +2771,12 @@ function initApp() {
   document.querySelectorAll(".brush-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const brush = btn.dataset.brush;
-      AppState.activeBrush = brush;
-
-      document.querySelectorAll(".brush-btn").forEach(b => {
-        b.classList.remove("ring-2", "ring-amber-400/50", "ring-emerald-500/50", "ring-indigo-500/50", "ring-cyan-500/50", "ring-rose-500/50", "active", "border-2");
-      });
-
-      btn.classList.add("active", "ring-2", "border-2");
+      if (AppState.activeBrush === brush) {
+        clearActiveBrush();
+        showToast("Pincel deseleccionado", "info");
+        return;
+      }
+      setActiveBrush(brush);
       showToast(`Pincel seleccionado: [${brush}]`, "info");
     });
   });
@@ -2602,6 +2785,7 @@ function initApp() {
   const btnCalPrev = document.getElementById("cal-btn-prev");
   if (btnCalPrev) {
     btnCalPrev.addEventListener("click", () => {
+      clearActiveBrush();
       if (AppState.calendarMonth > 0) {
         AppState.calendarMonth--;
       } else {
@@ -2616,6 +2800,7 @@ function initApp() {
   const btnCalNext = document.getElementById("cal-btn-next");
   if (btnCalNext) {
     btnCalNext.addEventListener("click", () => {
+      clearActiveBrush();
       if (AppState.calendarMonth < 11) {
         AppState.calendarMonth++;
       } else {
@@ -2630,6 +2815,7 @@ function initApp() {
   const selCalMonth = document.getElementById("cal-select-month");
   if (selCalMonth) {
     selCalMonth.addEventListener("change", (e) => {
+      clearActiveBrush();
       AppState.calendarMonth = parseInt(e.target.value, 10);
       renderCalendar();
     });
@@ -2647,6 +2833,7 @@ function initApp() {
       const val = parseInt(inputYear.value, 10);
       if (!isNaN(val) && val >= 1990 && val <= 2150) {
         if (AppState.calendarYear !== val) {
+          clearActiveBrush();
           AppState.calendarYear = val;
           syncYearDropdown();
           updateAll();
@@ -2667,6 +2854,7 @@ function initApp() {
 
   if (btnYearPrev) {
     btnYearPrev.addEventListener("click", () => {
+      clearActiveBrush();
       AppState.calendarYear--;
       syncYearDropdown();
       updateAll();
@@ -2676,6 +2864,7 @@ function initApp() {
 
   if (btnYearNext) {
     btnYearNext.addEventListener("click", () => {
+      clearActiveBrush();
       AppState.calendarYear++;
       syncYearDropdown();
       updateAll();
@@ -2688,6 +2877,7 @@ function initApp() {
     headerSelYear.addEventListener("change", (e) => {
       const selectedYear = parseInt(e.target.value, 10);
       if (selectedYear && !isNaN(selectedYear)) {
+        clearActiveBrush();
         AppState.calendarYear = selectedYear;
         syncYearDropdown();
         updateAll();
@@ -2761,7 +2951,7 @@ function initApp() {
   const btnPrintTab = document.getElementById("btn-print-table");
   if (btnPrintTab) btnPrintTab.addEventListener("click", () => window.print());
 
-  // Atajos de teclado para turnos (M, T, N, 2/B, V, L, D, X)
+  // Atajos de teclado para turnos (M, T, N, 2/B, V, L, D, X, Esc)
   window.addEventListener("keydown", (e) => {
     if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     const key = e.key.toUpperCase();
@@ -2773,12 +2963,19 @@ function initApp() {
     else if (key === "L") selectBrush("LD");
     else if (key === "D") selectBrush("DCI");
     else if (key === "X" || key === "DELETE" || key === "BACKSPACE") selectBrush("CLEAR");
+    else if (key === "ESCAPE") {
+      clearActiveBrush();
+      showToast("Pincel deseleccionado", "info");
+    }
   });
 
   function selectBrush(brushCode) {
     const btn = document.querySelector(`.brush-btn[data-brush="${brushCode}"]`);
     if (btn) btn.click();
   }
+
+  // Asegurar que al inicio no haya ningún pincel preseleccionado
+  clearActiveBrush();
 }
 
 // Inicialización inmediata o al completar la carga del DOM
