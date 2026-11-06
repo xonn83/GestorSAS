@@ -1047,5 +1047,20 @@
 
     <!-- SCRIPT PRINCIPAL MODULAR (Firebase Auth + Firestore Cloud + Gerhonte Engine) -->
     <script type="module" src="./src/app.js"></script>
+
+    <!-- REGISTRO DE SERVICE WORKER PARA INSTALACIÓN PWA / WEBAPK EN ANDROID -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js', { scope: './' })
+            .then((registration) => {
+              console.log('[GestorSAS] Service Worker PWA activo:', registration.scope);
+            })
+            .catch((err) => {
+              console.warn('[GestorSAS] Error al registrar Service Worker:', err);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
