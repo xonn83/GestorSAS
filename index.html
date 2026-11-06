@@ -642,17 +642,13 @@
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
           <span>2. Resumen</span>
         </button>
-        <button type="button" data-tab="projection" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
-          <span>3. Planificador</span>
-        </button>
         <button type="button" data-tab="request" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-          <span>4. Solicitud DCI</span>
+          <span>3. Solicitud DCI</span>
         </button>
         <button type="button" data-tab="rules" class="tab-btn flex-1 sm:flex-initial inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-100 whitespace-nowrap">
           <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-          <span>5. Normativa</span>
+          <span>4. Normativa</span>
         </button>
       </nav>
 
@@ -806,69 +802,7 @@
       </section>
 
       <!-- ============================================================== -->
-      <!-- PESTAÑA C: PLANIFICADOR DCI Y PROYECCIÓN                       -->
-      <!-- ============================================================== -->
-      <section id="tab-projection" class="tab-panel hidden space-y-4">
-        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6">
-          <div class="max-w-2xl">
-            <h3 class="text-base font-bold text-slate-900 tracking-tight">Simulador de Disfrute de DCI y Turnos de Fin de Contrato</h3>
-            <p class="text-xs text-slate-500 mt-1">
-              Comprueba el impacto de solicitar días libres (DCI) y calcula cuántos turnos debes realizar mensualmente en los meses restantes para finalizar en saldo 0.
-            </p>
-          </div>
-
-          <div class="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Slider de Simulación de DCI -->
-            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
-              <div class="flex items-center justify-between mb-2">
-                <label for="slider-dci" class="text-xs font-bold text-slate-800">Simular Disfrute de Días DCI:</label>
-                <span id="slider-dci-val" class="text-xs font-mono font-bold px-2 py-0.5 rounded bg-cyan-100 text-cyan-800">0 días (0h)</span>
-              </div>
-              <input type="range" id="slider-dci" min="0" max="30" value="0" step="1" class="w-full accent-cyan-600 cursor-pointer" />
-              <div class="flex items-center justify-between text-[11px] text-slate-400 mt-1">
-                <span>0 días</span>
-                <span>Máx. disponible: <strong id="proj-dci-available">0 días</strong></span>
-              </div>
-
-              <div class="mt-4 pt-3 border-t border-slate-200/80 text-xs space-y-2">
-                <div class="flex justify-between">
-                  <span class="text-slate-600">Saldo proyectado tras DCI:</span>
-                  <span id="proj-simulated-balance" class="font-mono font-bold text-emerald-700">+0,0 h</span>
-                </div>
-                <div class="flex justify-between">
-                  <span class="text-slate-600">Turnos promedio/mes en meses restantes:</span>
-                  <span id="proj-simulated-monthly-shifts" class="font-mono font-bold text-slate-800">0 turnos/mes</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Diagnóstico Proyectado -->
-            <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200/70 flex flex-col justify-between">
-              <div>
-                <div class="flex items-center gap-2 mb-2">
-                  <span id="proj-status-tag" class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-200 text-emerald-900">
-                    Posición Ventajosa
-                  </span>
-                </div>
-                <h4 id="proj-headline" class="text-sm font-bold text-slate-900">Exceso Disponible para Disfrute</h4>
-                <p id="proj-description" class="text-xs text-slate-600 mt-2 leading-relaxed">
-                  Con tu cuadrante actual has generado exceso de horas en la bolsa. Puedes solicitar tus descansos compensatorios (DCI) con antelación a tu dirección de servicio.
-                </p>
-              </div>
-
-              <div class="mt-4 pt-3 border-t border-emerald-200/50">
-                <p class="text-[11px] font-semibold text-emerald-900 mb-1.5">Distribución de turnos restantes:</p>
-                <div id="proj-pending-months-list" class="flex flex-wrap gap-1.5 text-[10px] font-mono">
-                  <!-- Meses restantes dinámicos -->
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <!-- ============================================================== -->
-      <!-- PESTAÑA D: SOLICITUD FORMAL DCI (LISTA PARA IMPRIMIR)           -->
+      <!-- PESTAÑA C: SOLICITUD FORMAL DCI (LISTA PARA IMPRIMIR)           -->
       <!-- ============================================================== -->
       <section id="tab-request" class="tab-panel hidden space-y-4">
         <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 sm:p-7">
@@ -908,63 +842,170 @@
       </section>
 
       <!-- ============================================================== -->
-      <!-- PESTAÑA E: NORMATIVA Y REGLAS GERHONTE SAS                     -->
+      <!-- PESTAÑA D: NORMATIVA Y REGLAS GERHONTE SAS                     -->
       <!-- ============================================================== -->
       <section id="tab-rules" class="tab-panel hidden space-y-4">
-        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-5">
+        <div class="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 space-y-6">
           <div>
-            <h3 class="text-base font-bold text-slate-900">Normativa Estatutaria y Cómputo de Jornada en el SAS</h3>
-            <p class="text-xs text-slate-500 mt-1">
-              Marco normativo oficial aplicable a la jornada de 35 horas semanales, turnos de trabajo y compensación de excesos en centros del Servicio Andaluz de Salud.
+            <div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold uppercase tracking-wider mb-2">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+              <span>Marco Jurídico Oficial Contrastado</span>
+            </div>
+            <h3 class="text-base sm:text-lg font-bold text-slate-900">Normativa Estatutaria y Cómputo de Jornada en el SAS</h3>
+            <p class="text-xs text-slate-500 mt-1 max-w-3xl">
+              Marco normativo y acuerdos de Mesa Sectorial aplicables a la jornada de 35 horas semanales, turnos de trabajo, régimen de descansos y compensación horaria (DCI) en los centros e instituciones del Servicio Andaluz de Salud.
             </p>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">1. Jornada Anual Base (35h Semanales)</h4>
-              <p class="text-slate-600 leading-relaxed">
-                El Decreto-ley de jornada de 35 horas semanales en la Junta de Andalucía y los acuerdos de Mesa Sectorial del SAS establecen:
-              </p>
-              <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1">
-                <li><strong>Diurno Ordinario:</strong> 1.540 horas netas anuales de trabajo efectivo.</li>
-                <li><strong>Rotatorio (con noches):</strong> 1.483 horas netas anuales (ponderación por penosidad nocturna).</li>
-                <li><strong>Nocturno Fijo:</strong> 1.450 horas netas anuales.</li>
-              </ul>
-            </div>
-
-            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">2. Cómputo Proporcional para Interinos y Sustitutos</h4>
-              <p class="text-slate-600 leading-relaxed">
-                Cuando el nombramiento no abarca los 365 días naturales del año, la exigencia horaria no es total sino estrictamente proporcional:
-              </p>
-              <div class="p-2.5 bg-white rounded-lg border border-slate-200 font-mono text-[11px] text-slate-800">
-                Jornada_Exigible = Math.round((Días_Contrato / 365) * Jornada_Base)
+            <!-- Tarjeta 1: Jornada Anual Base -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-emerald-800 uppercase tracking-wide">1. Jornada Anual Base (35h Semanales)</h4>
+                  <span class="text-[10px] font-mono bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold">SAS / BOJA</span>
+                </div>
+                <p class="text-slate-600 leading-relaxed">
+                  El Acuerdo de 17 de julio de 2018 de la Mesa General de Negociación Común de la Junta de Andalucía (ratificado por el Consejo de Gobierno) y los acuerdos de Mesa Sectorial de Sanidad del SAS fijan la jornada ordinaria en 35 horas semanales de promedio:
+                </p>
+                <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1 font-medium">
+                  <li><strong>Diurno Ordinario (L-V):</strong> 1.540 horas netas anuales de trabajo efectivo.</li>
+                  <li><strong>Rotatorio (con noches):</strong> 1.483 horas netas anuales (ponderación por penosidad nocturna).</li>
+                  <li><strong>Nocturno Fijo:</strong> 1.450 horas netas anuales.</li>
+                </ul>
               </div>
-              <p class="text-[11px] text-slate-500">
-                Cada mes devenga una cuota exigible equivalente a los días naturales del mes en los que el contrato estuvo en vigor.
-              </p>
+              <div class="pt-2.5 border-t border-slate-200">
+                <a href="https://www.juntadeandalucia.es/boja/2018/143/1" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-emerald-700 hover:text-emerald-800 font-bold hover:underline">
+                  <span>Consultar Acuerdo Jornada 35h en BOJA (n.º 143/2018)</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </div>
             </div>
 
-            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">3. Régimen de Salientes de Noche y Descansos</h4>
-              <p class="text-slate-600 leading-relaxed">
-                Tras la realización de un turno nocturno de 10 horas, el profesional genera el derecho reglamentario al descanso de salud laboral de 24h a 48h (Saliente / Libre):
-              </p>
-              <p class="text-slate-700">
-                <strong>IMPORTANTE:</strong> El saliente computa <strong>0,0 horas</strong> efectivas de trabajo (es libranza biológica, no trabajo). Las horas fueron devengadas íntegramente en la noche previa.
-              </p>
+            <!-- Tarjeta 2: Cómputo Proporcional -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-emerald-800 uppercase tracking-wide">2. Cómputo Proporcional por Nombramiento</h4>
+                  <span class="text-[10px] font-mono bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">Ley 55/2003</span>
+                </div>
+                <p class="text-slate-600 leading-relaxed">
+                  Para contratos de sustitución, interinidad o nombramientos temporales, la jornada exigible se computa proporcionalmente al periodo efectivo del contrato en base a 11 meses de actividad ordinaria:
+                </p>
+                <div class="p-2.5 bg-white rounded-lg border border-slate-200 font-mono text-[11px] text-slate-800 font-bold">
+                  Cuota_Mensual = (Días_Activos / Días_Mes) × (Jornada_Base / 11)
+                </div>
+                <p class="text-[11px] text-slate-500 leading-relaxed">
+                  Garantiza el devengo mensual de 140,0 h/mes en jornada diurna y la acumulación íntegra de las vacaciones reglamentarias devengadas (2,5 días por mes trabajado).
+                </p>
+              </div>
+              <div class="pt-2.5 border-t border-slate-200">
+                <a href="https://www.boe.es/buscar/act.php?id=BOE-A-2003-23101" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-blue-700 hover:text-blue-800 font-bold hover:underline">
+                  <span>Consultar Estatuto Marco (Ley 55/2003) en BOE</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </div>
             </div>
 
-            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2">
-              <h4 class="font-bold text-emerald-800 uppercase tracking-wide">4. Descanso Compensatorio por Exceso (DCI)</h4>
-              <p class="text-slate-600 leading-relaxed">
-                Cuando el cuadrante programado supere las horas proporcionales exigibles a la fecha, el exceso se consolida en la bolsa de horas a favor del profesional:
-              </p>
-              <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1">
-                <li>Cada <strong>7 horas</strong> de exceso generan <strong>1 día completo de libranza DCI</strong>.</li>
-                <li>El disfrute de un día DCI resta 7h del exceso a favor sin penalizar la retribución ordinaria.</li>
-                <li>Si al cese del contrato no ha sido posible disfrutarlos, deben liquidarse o compensarse formalmente.</li>
-              </ul>
+            <!-- Tarjeta 3: Salientes de Noche y Descansos -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-emerald-800 uppercase tracking-wide">3. Salientes de Noche y Descanso Obligatorio</h4>
+                  <span class="text-[10px] font-mono bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-bold">Directiva 2003/88/CE</span>
+                </div>
+                <p class="text-slate-600 leading-relaxed">
+                  Tras un turno nocturno de 10 horas, el personal estatutario tiene derecho inalienable al descanso mínimo entre jornadas (descanso de saliente de noche):
+                </p>
+                <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1 font-medium">
+                  <li>El día de <strong>Saliente de Noche computa 0,0 horas</strong> (libranza obligatoria por salud laboral).</li>
+                  <li>Las 10 horas íntegras del turno se imputan al día de inicio de la noche.</li>
+                  <li>No se puede programar turno diurno en el saliente inmediato sin respetar el descanso reglamentario de 24h a 48h.</li>
+                </ul>
+              </div>
+              <div class="pt-2.5 border-t border-slate-200">
+                <a href="https://www.boe.es/buscar/act.php?id=BOE-A-2003-23101#a48" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-purple-700 hover:text-purple-800 font-bold hover:underline">
+                  <span>Ver Art. 48 a 54 Ley 55/2003 (Tiempo de Trabajo y Descansos)</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </div>
+            </div>
+
+            <!-- Tarjeta 4: Descansos Compensatorios DCI -->
+            <div class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3 flex flex-col justify-between">
+              <div class="space-y-2">
+                <div class="flex items-center justify-between">
+                  <h4 class="font-bold text-emerald-800 uppercase tracking-wide">4. Descanso Compensatorio de Jornada (DCI)</h4>
+                  <span class="text-[10px] font-mono bg-cyan-100 text-cyan-800 px-2 py-0.5 rounded font-bold">Manual SAS</span>
+                </div>
+                <p class="text-slate-600 leading-relaxed">
+                  Cuando la programación del cuadrante supere las horas base ordinarias a la fecha, el exceso consolidado da derecho a descanso compensatorio remunerado:
+                </p>
+                <ul class="list-disc list-inside space-y-1 text-slate-700 pl-1 font-medium">
+                  <li>Cada <strong>7 horas netas de exceso</strong> acumuladas generan <strong>1 día de DCI</strong>.</li>
+                  <li>El disfrute de un día DCI computa como jornada realizada (sin merma salarial).</li>
+                  <li>Debe solicitarse formalmente antes de la extinción o cese del nombramiento.</li>
+                </ul>
+              </div>
+              <div class="pt-2.5 border-t border-slate-200">
+                <a href="https://www.sspa.juntadeandalucia.es/servicioandaluzdesalud/profesionales/recursos-humanos/jornadas-vacaciones-permisos-y-licencias" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-cyan-700 hover:text-cyan-800 font-bold hover:underline">
+                  <span>Portal SAS: Manual de Vacaciones, Permisos y Licencias</span>
+                  <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque de Enlaces y Recursos Oficiales Centralizados -->
+          <div class="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200">
+            <h4 class="font-bold text-emerald-900 text-xs uppercase tracking-wide mb-3 flex items-center gap-2">
+              <svg class="w-4 h-4 text-emerald-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+              <span>Documentación Oficial de Referencia (Enlaces Verificados)</span>
+            </h4>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 text-xs">
+              <a href="https://www.boe.es/buscar/act.php?id=BOE-A-2003-23101" target="_blank" rel="noopener noreferrer" class="p-3 bg-white rounded-lg border border-emerald-200/80 hover:border-emerald-400 hover:shadow-xs transition-all flex flex-col justify-between group">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-emerald-700 block mb-0.5">BOE Estatal</span>
+                  <strong class="text-slate-900 group-hover:text-emerald-700 block text-xs leading-tight">Ley 55/2003 (Estatuto Marco)</strong>
+                  <span class="text-[11px] text-slate-500 mt-1 block">Régimen general de jornada, descansos, permisos y vacaciones del personal estatutario.</span>
+                </div>
+                <span class="mt-2.5 text-[10px] font-bold text-emerald-700 inline-flex items-center gap-1 group-hover:underline">
+                  Abrir texto en BOE &rarr;
+                </span>
+              </a>
+
+              <a href="https://www.boe.es/buscar/act.php?id=BOE-A-2015-11719" target="_blank" rel="noopener noreferrer" class="p-3 bg-white rounded-lg border border-emerald-200/80 hover:border-emerald-400 hover:shadow-xs transition-all flex flex-col justify-between group">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-blue-700 block mb-0.5">BOE Estatal</span>
+                  <strong class="text-slate-900 group-hover:text-blue-700 block text-xs leading-tight">RDL 5/2015 (TREBEP)</strong>
+                  <span class="text-[11px] text-slate-500 mt-1 block">Art. 48.k: Regulación de días de asuntos particulares (moscosos) y régimen supletorio.</span>
+                </div>
+                <span class="mt-2.5 text-[10px] font-bold text-blue-700 inline-flex items-center gap-1 group-hover:underline">
+                  Abrir texto en BOE &rarr;
+                </span>
+              </a>
+
+              <a href="https://www.juntadeandalucia.es/boja/2018/143/1" target="_blank" rel="noopener noreferrer" class="p-3 bg-white rounded-lg border border-emerald-200/80 hover:border-emerald-400 hover:shadow-xs transition-all flex flex-col justify-between group">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-amber-700 block mb-0.5">BOJA Autonómico</span>
+                  <strong class="text-slate-900 group-hover:text-amber-700 block text-xs leading-tight">Acuerdo Jornada 35 Horas</strong>
+                  <span class="text-[11px] text-slate-500 mt-1 block">BOJA n.º 143/2018: Ratificación de jornada de 35 horas para el personal de la Junta y SAS.</span>
+                </div>
+                <span class="mt-2.5 text-[10px] font-bold text-amber-700 inline-flex items-center gap-1 group-hover:underline">
+                  Abrir BOJA oficial &rarr;
+                </span>
+              </a>
+
+              <a href="https://www.sspa.juntadeandalucia.es/servicioandaluzdesalud/profesionales/recursos-humanos/jornadas-vacaciones-permisos-y-licencias" target="_blank" rel="noopener noreferrer" class="p-3 bg-white rounded-lg border border-emerald-200/80 hover:border-emerald-400 hover:shadow-xs transition-all flex flex-col justify-between group">
+                <div>
+                  <span class="text-[10px] font-mono font-bold text-teal-700 block mb-0.5">Portal Oficial SAS</span>
+                  <strong class="text-slate-900 group-hover:text-teal-700 block text-xs leading-tight">Manual de Jornadas y Licencias</strong>
+                  <span class="text-[11px] text-slate-500 mt-1 block">Instrucciones y criterios vigentes de la Dirección General de Personal del SAS.</span>
+                </div>
+                <span class="mt-2.5 text-[10px] font-bold text-teal-700 inline-flex items-center gap-1 group-hover:underline">
+                  Visitar web SAS &rarr;
+                </span>
+              </a>
             </div>
           </div>
         </div>

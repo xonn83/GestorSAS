@@ -661,7 +661,6 @@ export function updateAll(skipTableRebuild = false) {
   } else {
     updateTableComputedCells();
   }
-  renderProjection();
   renderRequestLetter();
   triggerSave();
 }
@@ -1491,102 +1490,6 @@ function updateTableComputedCells() {
       </td>
     `;
   }
-}
-
-function renderProjection() {
-  const metrics = getAccumulatedMetrics();
-  const year = metrics.year;
-  const currentBalance = metrics.accumulatedBalance;
-  const remainingHoursTotal = metrics.remainingHoursAnnual;
-  const shiftDuration = parseFloat(AppState.config.hoursM) || 7.0;
-
-  const tag = document.getElementById("proj-status-tag");
-  const headline = document.getElementById("proj-headline");
-  const desc = document.getElementById("proj-description");
-  const dciAvail = document.getElementById("proj-dci-available");
-  const dciHours = parseFloat(AppState.config.hoursDCI) || 7.0;
-
-  const maxDciPossible = metrics.dciDays;
-  dciAvail.textContent = `${maxDciPossible} DCI`;
-
-  if (metrics.filledMonthsCount === 0) {
-    tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-600 text-white";
-    tag.textContent = "Sin Registros";
-    headline.textContent = "Aún no hay turnos registrados en este año";
-    desc.textContent = "Rellena los turnos trabajados en el Calendario o en el Resumen para calcular tu bolsa y proyección.";
-  } else if (currentBalance >= 7) {
-    tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-emerald-600 text-white";
-    tag.textContent = "Superávit Acumulado";
-    headline.textContent = `Tienes ${currentBalance} horas a favor hasta ${metrics.lastFilledMonthName} (equivalente a ${maxDciPossible} días DCI)`;
-    desc.textContent = "¡Atención! Solicita formalmente librar estos descansos antes de tu cese para no perderlos.";
-  } else if (currentBalance < -7) {
-    tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-rose-600 text-white";
-    tag.textContent = "Déficit Horario";
-    headline.textContent = `Llevas un desfase de ${Math.abs(currentBalance)} horas respecto a la cuota exigible a ${metrics.lastFilledMonthName}`;
-    desc.textContent = "Planifica turnos complementarios en los meses restantes para evitar deducciones.";
-  } else {
-    tag.className = "px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider bg-slate-700 text-white";
-    tag.textContent = "Jornada Equilibrada";
-    headline.textContent = `Tu saldo de horas está prácticamente a cero a ${metrics.lastFilledMonthName}`;
-    desc.textContent = "Mantén la asignación ordinaria de turnos mes a mes para concluir el año al 100%.";
-  }
-
-  const endMonth = parseISODate(AppState.config.endDate).getMonth();
-  const pendingContainer = document.getElementById("proj-pending-months-list");
-  pendingContainer.innerHTML = "";
-
-  let pendingMonthsCount = 0;
-  let pendingRequiredSum = 0;
-
-  for (let m = 0; m <= endMonth; m++) {
-    const act = getMonthActualHours(m);
-    const req = getMonthRequiredHours(year, m);
-    const row = AppState.monthlyTableData[m];
-    const hasShifts = row && (
-      (row.mananas || 0) > 0 ||
-      (row.tardes || 0) > 0 ||
-      (row.noches || 0) > 0 ||
-      (row.vacaciones || 0) > 0 ||
-      (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0)
-    );
-
-    if (!hasShifts && req > 0) {
-      pendingMonthsCount++;
-      pendingRequiredSum += req;
-      const recShifts = Math.ceil(req / shiftDuration);
-      const div = document.createElement("div");
-      div.className = "p-2.5 bg-white rounded-lg border border-slate-200 flex items-center justify-between";
-      div.innerHTML = `
-        <span class="font-bold text-slate-800">${MONTH_NAMES[m]}</span>
-        <div class="flex items-center gap-3">
-          <span class="text-slate-500 font-mono">Cuota: ${req.toFixed(1)}h</span>
-          <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 font-semibold font-mono text-[11px]">${recShifts} turnos rec.</span>
-        </div>
-      `;
-      pendingContainer.appendChild(div);
-    }
-  }
-
-  if (pendingMonthsCount === 0) {
-    pendingContainer.innerHTML = `<div class="p-3 text-slate-400 text-center italic bg-white rounded-lg">Todos los meses activos tienen ya turnos registrados.</div>`;
-  }
-
-  const slider = document.getElementById("slider-dci");
-  slider.max = Math.max(10, maxDciPossible + 5);
-  slider.value = AppState.simulatedDciDays;
-  const simDays = parseInt(slider.value, 10);
-  const simHours = simDays * dciHours;
-  document.getElementById("slider-dci-val").textContent = `${simDays} días (${simHours}h)`;
-
-  const simulatedBalance = parseFloat((currentBalance - simHours).toFixed(1));
-  const simSign = simulatedBalance > 0 ? "+" : "";
-  const simBalEl = document.getElementById("proj-simulated-balance");
-  simBalEl.textContent = `${simSign}${simulatedBalance.toFixed(1)} h`;
-  simBalEl.className = simulatedBalance >= 0 ? "font-bold font-mono text-emerald-700" : "font-bold font-mono text-rose-700";
-
-  const simRemainingShifts = pendingMonthsCount > 0 ? (remainingHoursTotal / pendingMonthsCount / shiftDuration).toFixed(1) : "0";
-  document.getElementById("proj-simulated-monthly-shifts").textContent = `${simRemainingShifts} turnos/mes`;
 }
 
 function renderRequestLetter() {
@@ -2921,7 +2824,6 @@ function initApp() {
         renderCalendar();
       }
       if (target === "table") renderTable();
-      if (target === "projection") renderProjection();
       if (target === "request") renderRequestLetter();
     });
   });
@@ -3051,15 +2953,6 @@ function initApp() {
   const btnExportCsv = document.getElementById("btn-export-csv");
   if (btnExportCsv) {
     btnExportCsv.addEventListener("click", exportarPDF);
-  }
-
-  // Slider DCI
-  const slider = document.getElementById("slider-dci");
-  if (slider) {
-    slider.addEventListener("input", (e) => {
-      AppState.simulatedDciDays = parseInt(e.target.value, 10);
-      renderProjection();
-    });
   }
 
   // Fechas propuestas para DCI

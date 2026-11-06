@@ -29,13 +29,13 @@ Herramienta profesional diseñada para profesionales del **Servicio Andaluz de S
    - Columna final dedicada a **DCI Netos Acumulados Pendientes de Disfrutar**, reflejando con exactitud el exceso de jornada real que el centro adeuda al trabajador.
    - Sincronización bidireccional inmediata entre la cuadrícula del calendario y la tabla mensual.
 
-4. **Planificador y Proyector de Exceso a Fin de Nombramiento**:
-   - Simulación de días DCI para comprobar cómo quedaría la bolsa.
-   - Cálculo automático del número de turnos necesarios para cuadrar el saldo a 0h.
-
-5. **Generador de Solicitud Formal DCI**:
+4. **Generador de Solicitud Formal DCI**:
    - Redacción automática de la instancia administrativa oficial dirigida a la Dirección/Jefatura de Personal del SAS, con detalle de fechas propuestas, saldo acumulado y fundamentación legal.
    - Opciones directas para imprimir en formato administrativo oficial o copiar al portapapeles.
+
+5. **Normativa y Repositorio Documental Oficial**:
+   - Resumen claro de la normativa estatutaria de aplicación en el SAS (jornada de 35 horas, descansos obligatorios, salientes de noche y régimen DCI).
+   - Enlaces directos a las publicaciones oficiales en BOE, BOJA y el portal institucional del Servicio Andaluz de Salud (SSPA).
 
 6. **Persistencia Dual (Nube + Modo Local Seguro)**:
    - Sincronización en la nube mediante **Firebase Authentication** y **Cloud Firestore** con reglas de seguridad ABAC por usuario.
