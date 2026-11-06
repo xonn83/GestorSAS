@@ -709,6 +709,8 @@ export function getAccumulatedMetrics() {
 
   const monthlyBasePresentialHours = (parseFloat(AppState.config.baseHours) || 1540) / 11;
   let totalDciGeneratedHours = 0.0;
+  let totalBaseInFilled = 0.0;
+  let totalEffectiveInFilled = 0.0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
@@ -748,18 +750,15 @@ export function getAccumulatedMetrics() {
       const daysInMonth = getDaysInMonth(year, m);
       const monthRatio = daysInMonth > 0 ? (actDays / daysInMonth) : 0;
       const monthBase = monthlyBasePresentialHours * monthRatio;
+      totalBaseInFilled += monthBase;
+      totalEffectiveInFilled += effHours;
+
       const requiredPres = Math.max(0, monthBase - permHours);
       const rawDiff = presHours - requiredPres;
       const monthExcess = rawDiff > 0.05 ? parseFloat(rawDiff.toFixed(1)) : 0.0;
       totalDciGeneratedHours += monthExcess;
     }
   });
-
-  // Saldo General Acumulado en meses rellenados
-  let accumulatedBalance = 0.0;
-  if (filledMonthsCount > 0) {
-    accumulatedBalance = parseFloat((workedInFilledMonths - requiredInFilledMonths).toFixed(1));
-  }
 
   // Bolsa DCI (Exceso Real):
   // Horas efectivas presenciales trabajadas por encima de la jornada ordinaria base mensual
@@ -770,6 +769,21 @@ export function getAccumulatedMetrics() {
   const dciRemainderHours = parseFloat((dciNetHours % hDCI).toFixed(1));
   const dciExactDays = parseFloat((dciNetHours / hDCI).toFixed(1));
   const totalDciConsumedDays = Math.round(totalDciConsumedHours / hDCI);
+
+  // Saldo General Acumulado en meses rellenados:
+  // Si no existen DCI pendientes y el empleado cumple su jornada ordinaria base (ej. 140h/mes),
+  // el saldo se muestra 'Al Día' (0.0h) para no generar falsa alarma de horas extra.
+  // Si tiene exceso real consolidado, coincide exactamente con las horas DCI netas (+X h).
+  // Si ha trabajado menos de la base ordinaria, refleja el déficit real en horas (-X h).
+  let accumulatedBalance = 0.0;
+  if (filledMonthsCount > 0) {
+    if (dciNetHours > 0) {
+      accumulatedBalance = dciNetHours;
+    } else {
+      const netBaseDiff = parseFloat((totalEffectiveInFilled - totalBaseInFilled).toFixed(1));
+      accumulatedBalance = netBaseDiff < -0.1 ? netBaseDiff : 0.0;
+    }
+  }
 
   // Bolsa Vacaciones
   const remainingVacationDays = Math.max(0, parseFloat((totalVacationDays - totalVacationConsumedDays).toFixed(1)));
@@ -849,17 +863,18 @@ function renderKpis() {
       if (balanceLabel) balanceLabel.textContent = "Sin registros aún";
       if (balanceSub) balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
     } else {
-      if (balanceSub) balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h / ${metrics.requiredInFilledMonths.toFixed(1)}h exig. (a ${metrics.lastFilledMonthName})`;
-
       if (metrics.accumulatedBalance > 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
+        if (balanceSub) balanceSub.textContent = `+${metrics.accumulatedBalance.toFixed(1)}h acumuladas (${metrics.dciDaysAvailable} d DCI disponibles)`;
       } else if (metrics.accumulatedBalance < 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
+        if (balanceSub) balanceSub.textContent = `Faltan ${Math.abs(metrics.accumulatedBalance).toFixed(1)}h para completar la jornada ordinaria`;
       } else {
         balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
+        if (balanceSub) balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h realizadas (Jornada ordinaria al día)`;
       }
     }
   }
