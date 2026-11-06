@@ -708,11 +708,6 @@ export function getAccumulatedMetrics() {
   let presentialInFilledMonths = 0;
   let permitsInFilledMonths = 0;
 
-  const monthlyBasePresentialHours = (parseFloat(AppState.config.baseHours) || 1540) / 11;
-  let totalDciGeneratedHours = 0.0;
-  let totalBaseInFilled = 0.0;
-  let totalEffectiveInFilled = 0.0;
-
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
     totalActiveDaysInYear += actDays;
@@ -747,44 +742,23 @@ export function getAccumulatedMetrics() {
       requiredInFilledMonths += getMonthRequiredHours(year, m);
       presentialInFilledMonths += presHours;
       permitsInFilledMonths += permHours;
-
-      const daysInMonth = getDaysInMonth(year, m);
-      const monthRatio = daysInMonth > 0 ? (actDays / daysInMonth) : 0;
-      const monthBase = monthlyBasePresentialHours * monthRatio;
-      totalBaseInFilled += monthBase;
-      totalEffectiveInFilled += effHours;
-
-      const requiredPres = Math.max(0, monthBase - permHours);
-      const rawDiff = presHours - requiredPres;
-      const monthExcess = rawDiff > 0.05 ? parseFloat(rawDiff.toFixed(1)) : 0.0;
-      totalDciGeneratedHours += monthExcess;
     }
   });
 
+  // Saldo General Acumulado en meses auditados:
+  // Horas efectivas realizadas menos horas exigibles en los meses con registros.
+  const rawAccumulatedBalance = filledMonthsCount > 0
+    ? parseFloat((workedInFilledMonths - requiredInFilledMonths).toFixed(1))
+    : 0.0;
+  const accumulatedBalance = Math.abs(rawAccumulatedBalance) < 0.05 ? 0.0 : rawAccumulatedBalance;
+
   // Bolsa DCI (Exceso Real):
-  // Horas efectivas presenciales trabajadas por encima de la jornada ordinaria base mensual
-  // (140h/mes en diurno) menos los días DCI ya disfrutados en el cuadrante.
-  const dciRawHours = parseFloat((totalDciGeneratedHours - totalDciConsumedHours).toFixed(1));
-  const dciNetHours = dciRawHours > 0 ? dciRawHours : 0.0;
+  // El exceso real consolidado coincide exactamente con el saldo neto acumulado positivo.
+  const dciNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
   const dciDaysAvailable = Math.floor(dciNetHours / hDCI);
   const dciRemainderHours = parseFloat((dciNetHours % hDCI).toFixed(1));
   const dciExactDays = parseFloat((dciNetHours / hDCI).toFixed(1));
   const totalDciConsumedDays = Math.round(totalDciConsumedHours / hDCI);
-
-  // Saldo General Acumulado en meses rellenados:
-  // Si no existen DCI pendientes y el empleado cumple su jornada ordinaria base (ej. 140h/mes),
-  // el saldo se muestra 'Al Día' (0.0h) para no generar falsa alarma de horas extra.
-  // Si tiene exceso real consolidado, coincide exactamente con las horas DCI netas (+X h).
-  // Si ha trabajado menos de la base ordinaria, refleja el déficit real en horas (-X h).
-  let accumulatedBalance = 0.0;
-  if (filledMonthsCount > 0) {
-    if (dciNetHours > 0) {
-      accumulatedBalance = dciNetHours;
-    } else {
-      const netBaseDiff = parseFloat((totalEffectiveInFilled - totalBaseInFilled).toFixed(1));
-      accumulatedBalance = netBaseDiff < -0.1 ? netBaseDiff : 0.0;
-    }
-  }
 
   // Bolsa Vacaciones
   const remainingVacationDays = Math.max(0, parseFloat((totalVacationDays - totalVacationConsumedDays).toFixed(1)));
@@ -867,7 +841,8 @@ function renderKpis() {
       if (metrics.accumulatedBalance > 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
-        if (balanceSub) balanceSub.textContent = `+${metrics.accumulatedBalance.toFixed(1)}h acumuladas (${metrics.dciDaysAvailable} d DCI disponibles)`;
+        const dciLabel = metrics.dciDaysAvailable === 1 ? "1 d DCI disponible" : `${metrics.dciDaysAvailable} d DCI disponibles`;
+        if (balanceSub) balanceSub.textContent = `+${metrics.accumulatedBalance.toFixed(1)}h acumuladas (${dciLabel})`;
       } else if (metrics.accumulatedBalance < 0) {
         balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
         if (balanceLabel) balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
@@ -895,10 +870,12 @@ function renderKpis() {
 
   if (dciHoursEl) {
     const signDci = metrics.dciDaysAvailable > 0 ? "+" : "";
-    dciHoursEl.textContent = `${signDci}${metrics.dciDaysAvailable} Días`;
+    const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
+    dciHoursEl.textContent = `${signDci}${metrics.dciDaysAvailable} ${dayWord}`;
   }
   if (dciDaysEl) {
-    dciDaysEl.textContent = `${metrics.dciDaysAvailable} Días`;
+    const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
+    dciDaysEl.textContent = `${metrics.dciDaysAvailable} ${dayWord}`;
   }
   if (dciLabelEl) {
     if (metrics.dciNetHours > 0) {
@@ -1297,8 +1274,6 @@ function updateTableComputedCells() {
   let totDciHoras = 0;
   let totActualHours = 0;
   let runningAccumBalance = 0;
-  let runningDciAccum = 0.0;
-  const monthlyBasePresentialHours = (parseFloat(AppState.config.baseHours) || 1540) / 11;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -1439,15 +1414,7 @@ function updateTableComputedCells() {
 
       const cellDciNet = tr.querySelector(".cell-dci-net");
       if (cellDciNet) {
-        const daysInMonth = getDaysInMonth(year, m);
-        const monthRatio = daysInMonth > 0 ? (activeDays / daysInMonth) : 0;
-        const monthBase = monthlyBasePresentialHours * monthRatio;
-        const requiredPres = Math.max(0, monthBase - permHours);
-        const rawDiff = presHours - requiredPres;
-        const monthExcess = rawDiff > 0.05 ? parseFloat(rawDiff.toFixed(1)) : 0.0;
-        runningDciAccum += (monthExcess - dciH);
-
-        const currentDciNetHours = Math.max(0, parseFloat(runningDciAccum.toFixed(1)));
+        const currentDciNetHours = Math.max(0, parseFloat(runningAccumBalance.toFixed(1)));
         if (currentDciNetHours > 0) {
           const dciDays = Math.floor(currentDciNetHours / hDCI);
           cellDciNet.textContent = `+${currentDciNetHours.toFixed(1)} h (${dciDays} d)`;
@@ -1460,8 +1427,8 @@ function updateTableComputedCells() {
     }
   });
 
-  const accumSign = runningAccumBalance > 0 ? "+" : "";
-  const finalDciHours = Math.max(0, parseFloat(runningDciAccum.toFixed(1)));
+  const accumSign = runningAccumBalance > 0.05 ? "+" : "";
+  const finalDciHours = Math.max(0, parseFloat(runningAccumBalance.toFixed(1)));
   const finalDciDays = Math.floor(finalDciHours / hDCI);
 
   const tfoot = document.getElementById("gerhonte-table-totals");
@@ -1911,8 +1878,6 @@ export function exportarPDF() {
   let totDciHoras = 0;
   let totActualHours = 0;
   let runningAccum = 0;
-  let runningDciAccum = 0.0;
-  const monthlyBasePresentialHours = (parseFloat(AppState.config.baseHours) || 1540) / 11;
 
   const tableBody = AppState.monthlyTableData.map((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -1965,18 +1930,10 @@ export function exportarPDF() {
     totActualHours += actHours;
     runningAccum += monthBal;
 
-    const signMonth = monthBal > 0 ? "+" : "";
-    const signAccum = runningAccum > 0 ? "+" : "";
+    const signMonth = monthBal > 0.05 ? "+" : "";
+    const signAccum = runningAccum > 0.05 ? "+" : "";
 
-    const daysInMonth = getDaysInMonth(year, m);
-    const monthRatio = daysInMonth > 0 ? (activeDays / daysInMonth) : 0;
-    const monthBase = monthlyBasePresentialHours * monthRatio;
-    const requiredPres = Math.max(0, monthBase - permHours);
-    const rawDiff = presHours - requiredPres;
-    const monthExcess = rawDiff > 0.05 ? parseFloat(rawDiff.toFixed(1)) : 0.0;
-    runningDciAccum += (monthExcess - dciH);
-
-    const rowDciHours = Math.max(0, parseFloat(runningDciAccum.toFixed(1)));
+    const rowDciHours = Math.max(0, parseFloat(runningAccum.toFixed(1)));
     const dciNetText = rowDciHours > 0
       ? `+${rowDciHours.toFixed(1)} h (${Math.floor(rowDciHours / hDCI)} d)`
       : "0.0 h (0 d)";
@@ -2000,8 +1957,8 @@ export function exportarPDF() {
     ];
   });
 
-  const totalAccumSign = runningAccum > 0 ? "+" : "";
-  const finalPdfDci = Math.max(0, parseFloat(runningDciAccum.toFixed(1)));
+  const totalAccumSign = runningAccum > 0.05 ? "+" : "";
+  const finalPdfDci = Math.max(0, parseFloat(runningAccum.toFixed(1)));
   const finalPdfDciDays = Math.floor(finalPdfDci / hDCI);
   const tableFoot = [[
     `TOTAL AUDITADO (${year})`,
@@ -2129,9 +2086,7 @@ export function exportarCSV() {
   csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);DCI Netos Pendientes (h);Estado\r\n";
 
   let runningAccum = 0;
-  let runningDciAccum = 0.0;
   let totVacaciones = 0;
-  const monthlyBasePresentialHours = (parseFloat(AppState.config.baseHours) || 1540) / 11;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -2157,15 +2112,7 @@ export function exportarCSV() {
       const monthBal = parseFloat((actHours - reqHours).toFixed(1));
       runningAccum += monthBal;
 
-      const daysInMonth = getDaysInMonth(year, m);
-      const monthRatio = daysInMonth > 0 ? (activeDays / daysInMonth) : 0;
-      const monthBase = monthlyBasePresentialHours * monthRatio;
-      const requiredPres = Math.max(0, monthBase - permHours);
-      const rawDiff = presHours - requiredPres;
-      const monthExcess = rawDiff > 0.05 ? parseFloat(rawDiff.toFixed(1)) : 0.0;
-      runningDciAccum += (monthExcess - dciH);
-
-      const dciNetHours = Math.max(0, parseFloat(runningDciAccum.toFixed(1)));
+      const dciNetHours = Math.max(0, parseFloat(runningAccum.toFixed(1)));
       const dciNet = dciNetHours > 0 ? dciNetHours.toFixed(1) : "0.0";
       csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};${dciNet};Auditado\r\n`;
     }
