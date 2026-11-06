@@ -1423,27 +1423,72 @@ function updateTableComputedCells() {
 }
 
 function renderRequestLetter() {
+  const select = document.getElementById("req-type-select");
+  const type = select ? select.value : (AppState.requestType || "dci");
+  AppState.requestType = type;
+
   const metrics = getAccumulatedMetrics();
   const accumulatedBalance = metrics.accumulatedBalance;
   const dciHours = parseFloat(AppState.config.hoursDCI) || 7.0;
-  const dciDays = metrics.dciDays;
+  const dciDays = metrics.dciDaysAvailable;
   const remainderHours = metrics.dciRemainderHours;
   const auditedNote = metrics.lastFilledMonthName ? ` (auditado a fecha de ${metrics.lastFilledMonthName})` : "";
 
-  const workerName = AppState.config.workerName;
-  const workerDni = AppState.config.dni;
-  const proposedDates = AppState.config.proposedDates;
-  const category = AppState.config.category;
-  const center = AppState.config.center;
-  const service = AppState.config.service;
-  const startDate = AppState.config.startDate;
-  const endDate = AppState.config.endDate;
+  const workerName = AppState.config.workerName || "PERSONAL ESTATUTARIO";
+  const workerDni = AppState.config.dni || "00000000X";
+  const category = AppState.config.category || "PROFESIONAL SANITARIO";
+  const center = AppState.config.center || "HOSPITAL / DISTRITO SAS";
+  const service = AppState.config.service || "UNIDAD ASISTENCIAL";
+  const startDate = AppState.config.startDate || "01/01/2026";
+  const endDate = AppState.config.endDate || "31/12/2026";
+
+  const datesLabel = document.getElementById("req-dates-label");
+  const datesInput = document.getElementById("req-proposed-dates");
+  const badge = document.getElementById("req-balance-badge");
+
+  if (!AppState.proposedDatesByType) {
+    AppState.proposedDatesByType = {
+      dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+      moscosos: "Día 15 de Mayo",
+      vacaciones: "Del 1 al 15 de Agosto"
+    };
+  }
+
+  // Actualizar UI de controles
+  if (type === "dci") {
+    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Disfrute de DCI";
+    if (datesInput) datesInput.placeholder = "Ej: Días 14, 15 y 16 de Diciembre";
+    if (badge) {
+      const dWord = dciDays === 1 ? "día" : "días";
+      badge.textContent = `${dciDays} ${dWord} DCI disp. (${metrics.dciNetHours > 0 ? '+' : ''}${metrics.dciNetHours.toFixed(1)}h)`;
+      badge.className = "text-[11px] text-cyan-800 font-semibold bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200";
+    }
+  } else if (type === "moscosos") {
+    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Moscosos (LD)";
+    if (datesInput) datesInput.placeholder = "Ej: Días 15 y 16 de Mayo";
+    if (badge) {
+      badge.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días disponibles`;
+      badge.className = "text-[11px] text-purple-800 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200";
+    }
+  } else if (type === "vacaciones") {
+    if (datesLabel) datesLabel.textContent = "Periodo Propuesto para Vacaciones";
+    if (datesInput) datesInput.placeholder = "Ej: Del 1 al 15 de Agosto";
+    if (badge) {
+      badge.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días disponibles`;
+      badge.className = "text-[11px] text-emerald-800 font-semibold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200";
+    }
+  }
+
+  const proposedDates = (datesInput ? datesInput.value : "") || AppState.proposedDatesByType[type] || "A DETERMINAR";
 
   const today = new Date();
   const dateOptions = { day: "numeric", month: "long", year: "numeric" };
   const fechaHoy = today.toLocaleDateString("es-ES", dateOptions);
 
-  const letter = `A LA DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
+  let letter = "";
+
+  if (type === "dci") {
+    letter = `A LA DIRECCIÓN GERENCIA / DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
 CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
 UNIDAD / SERVICIO: ${service.toUpperCase()}
 
@@ -1453,13 +1498,13 @@ D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal esta
 
 EXPONE:
 
-PRIMERO.- Que de conformidad con el Acuerdo de la Mesa Sectorial de Sanidad del Servicio Andaluz de Salud sobre jornada laboral y cuadrantes de turnos (sistema Gerhonte), así como la normativa estatutaria de aplicación, mi jornada neta anual proporcional asciende a la fecha a un cómputo auditado de cumplimiento superior a la cuota exigible.
+PRIMERO.- Que de conformidad con el Acuerdo de la Mesa Sectorial de Sanidad del Servicio Andaluz de Salud sobre jornada laboral y régimen de ponderación de turnos (sistema Gerhonte), así como la normativa estatutaria de aplicación, mi jornada neta anual proporcional asciende a la fecha a un cómputo auditado de cumplimiento superior a la cuota exigible.
 
 SEGUNDO.- Que según la auditoría de cuadrante y registro de turnos efectivamente realizados hasta la fecha${auditedNote}, se acredita un SALDO A FAVOR acumulado de ${accumulatedBalance > 0 ? '+' : ''}${accumulatedBalance.toFixed(1)} HORAS netas de trabajo efectivo por encima de la jornada debida.
 
-TERCERO.- Que dicho exceso horario equivale exactamente a ${dciDays} JORNADA(S) COMPLETA(S) de descanso reglamentario (calculado a razón de ${dciHours.toFixed(1)} horas ordinarias por turno), restando un remanente en bolsa de ${remainderHours.toFixed(1)} horas.
+TERCERO.- Que dicho exceso horario equivale a ${dciDays} JORNADA(S) COMPLETA(S) de descanso reglamentario (calculado a razón de ${dciHours.toFixed(1)} horas ordinarias por turno), restando un remanente en bolsa de ${remainderHours.toFixed(1)} horas.
 
-CUARTO.- Que dada la condición de nombramiento con fecha prevista de cese y con el fin de evitar discrepancias administrativas o la pérdida irreparable del derecho a la compensación del exceso de jornada laboral prestada,
+CUARTO.- Que dada la vigencia del nombramiento y con el fin de evitar discrepancias administrativas o la pérdida sobrevenida del derecho a la compensación del exceso de jornada laboral prestada,
 
 SOLICITA:
 
@@ -1467,7 +1512,7 @@ Que teniendo por presentado este escrito en tiempo y forma, se sirva admitirlo y
 
    >>> ${proposedDates.toUpperCase()} <<<
 
-O subsidiariamente, aquellas fechas alternativas previas a la fecha de finalización del nombramiento que garanticen la adecuada cobertura del servicio asistencial sin menoscabo de mi derecho al descanso compensatorio.
+O subsidiariamente, aquellas fechas alternativas previas a la finalización del nombramiento que garanticen la adecuada cobertura del servicio asistencial sin menoscabo del derecho al descanso compensatorio.
 
 
 En Andalucía, a ${fechaHoy}.
@@ -1475,7 +1520,98 @@ En Andalucía, a ${fechaHoy}.
 
 Fdo.: ${workerName}
 Categoría: ${category}
-D.N.I.: ${workerDni}`;
+D.N.I.: ${workerDni}
+
+
+---------------------------------------------------------------------------------------------------------
+DILIGENCIA DE CONFORMIDAD ASISTENCIAL / VISTO BUENO:
+
+[  ] PROCEDE LA CONCESIÓN (Cobertura garantizada)       [  ] NO PROCEDE (Denegación motivada)
+
+Fdo. Responsable de Unidad / Supervisión:               Fecha: _____ / _____ / 2026`;
+
+  } else if (type === "moscosos") {
+    letter = `A LA DIRECCIÓN GERENCIA / DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
+CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
+UNIDAD / SERVICIO: ${service.toUpperCase()}
+
+ASUNTO: SOLICITUD DE DÍAS POR ASUNTOS PARTICULARES (DÍAS DE LIBRE DISPOSICIÓN / MOSCOSOS)
+
+D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate},
+
+EXPONE:
+
+PRIMERO.- Que al amparo del artículo 48.k del Real Decreto Legislativo 5/2015 (Texto Refundido de la Ley del Estatuto Básico del Empleado Público - TREBEP), la Ley 55/2003 (Estatuto Marco del Personal Estatutario de los Servicios de Salud) y el Manual de Vacaciones, Permisos y Licencias del Personal de Centros e Instituciones Sanitarias del Servicio Andaluz de Salud (SAS), el personal estatutario tiene derecho al disfrute de días de permiso retribuido por asuntos particulares a lo largo del año natural.
+
+SEGUNDO.- Que para el presente periodo en atención a las fechas de nombramiento, me corresponde un cupo de ${metrics.totalLdDays} DÍAS reconocidos de libre disposición, constando a la fecha un cómputo disfrutado de ${metrics.totalLdConsumedDays} día(s) en cuadrante y acreditando un SALDO DISPONIBLE de ${metrics.remainingLdDays} DÍA(S) pendientes de disfrute.
+
+TERCERO.- Que reuniendo los requisitos exigibles y con antelación suficiente para no interferir en la adecuada organización asistencial del servicio,
+
+SOLICITA:
+
+Que teniendo por presentado este escrito, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de DÍA(S) POR ASUNTOS PARTICULARES (MOSCOSOS / LD), proponiendo como fechas para su disfrute:
+
+   >>> ${proposedDates.toUpperCase()} <<<
+
+O subsidiariamente, aquellas fechas alternativas de común acuerdo con la supervisión de la unidad asistencial en caso de concurrir necesidades asistenciales sobrevenidas.
+
+
+En Andalucía, a ${fechaHoy}.
+
+
+Fdo.: ${workerName}
+Categoría: ${category}
+D.N.I.: ${workerDni}
+
+
+---------------------------------------------------------------------------------------------------------
+DILIGENCIA DE CONFORMIDAD ASISTENCIAL / VISTO BUENO:
+
+[  ] PROCEDE LA CONCESIÓN (Cobertura garantizada)       [  ] NO PROCEDE (Denegación motivada)
+
+Fdo. Responsable de Unidad / Supervisión:               Fecha: _____ / _____ / 2026`;
+
+  } else if (type === "vacaciones") {
+    letter = `A LA DIRECCIÓN GERENCIA / DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
+CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
+UNIDAD / SERVICIO: ${service.toUpperCase()}
+
+ASUNTO: SOLICITUD REGLAMENTARIA DE VACACIONES ANUALES
+
+D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate},
+
+EXPONE:
+
+PRIMERO.- Que de conformidad con el artículo 50 del Real Decreto Legislativo 5/2015 (TREBEP), la Ley 55/2003 (Estatuto Marco) y el Manual de Vacaciones, Permisos y Licencias del Servicio Andaluz de Salud (SAS), el personal estatutario tiene derecho a disfrutar de un periodo anual retribuido de vacaciones de 22 días hábiles (o un mes natural) por año completo de servicios, o la parte proporcional devengada según la duración del nombramiento.
+
+SEGUNDO.- Que según las fechas de nombramiento registradas en mi expediente, mi derecho devengado asciende a ${metrics.totalVacationDays} DÍAS de vacaciones reglamentarias, habiendo disfrutado hasta la fecha ${metrics.totalVacationConsumedDays} días en cuadrante, restando por tanto un SALDO A FAVOR de ${metrics.remainingVacationDays} DÍAS pendientes de disfrute.
+
+TERCERO.- Que con el fin de planificar con la debida antelación la cobertura del servicio y asegurar el descanso reglamentario previo a la finalización del nombramiento,
+
+SOLICITA:
+
+Que teniendo por presentado este escrito, se sirva admitirlo y tramite la concesión del periodo de VACACIONES ANUALES reglamentarias para las siguientes fechas propuestas:
+
+   >>> ${proposedDates.toUpperCase()} <<<
+
+Quedando a disposición de la Dirección y Jefatura del Servicio para cualquier ajuste subsidiario que concilie la necesidad asistencial con el derecho al descanso vacacional retribuido.
+
+
+En Andalucía, a ${fechaHoy}.
+
+
+Fdo.: ${workerName}
+Categoría: ${category}
+D.N.I.: ${workerDni}
+
+
+---------------------------------------------------------------------------------------------------------
+DILIGENCIA DE CONFORMIDAD ASISTENCIAL / VISTO BUENO:
+
+[  ] PROCEDE LA CONCESIÓN (Cobertura garantizada)       [  ] NO PROCEDE (Denegación motivada)
+
+Fdo. Responsable de Unidad / Supervisión:               Fecha: _____ / _____ / 2026`;
+  }
 
   const el = document.getElementById("request-preview-box");
   if (el) el.textContent = letter;
@@ -1498,7 +1634,10 @@ export function syncConfigInputsFromState() {
   setVal("cfg-shift-v", AppState.config.hoursV);
   setVal("cfg-shift-ld", AppState.config.hoursLD);
   setVal("cfg-shift-dci", AppState.config.hoursDCI);
-  setVal("req-proposed-dates", AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre");
+  setVal("req-type-select", AppState.requestType || "dci");
+  const activeType = AppState.requestType || "dci";
+  const defaultDates = (AppState.proposedDatesByType && AppState.proposedDatesByType[activeType]) || AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre";
+  setVal("req-proposed-dates", defaultDates);
 
   // Actualizar datos del resumen de la tarjeta colapsable
   const sumDates = document.getElementById("summary-nom-dates");
@@ -2846,14 +2985,46 @@ function initApp() {
   }
   const btnExportCsv = document.getElementById("btn-export-csv");
   if (btnExportCsv) {
-    btnExportCsv.addEventListener("click", exportarPDF);
+    btnExportCsv.addEventListener("click", exportarCSV);
   }
 
-  // Fechas propuestas para DCI
+  // Selector de tipo de solicitud (DCI, Moscosos, Vacaciones)
+  const reqTypeSelect = document.getElementById("req-type-select");
+  if (reqTypeSelect) {
+    reqTypeSelect.addEventListener("change", (e) => {
+      const type = e.target.value;
+      AppState.requestType = type;
+      if (!AppState.proposedDatesByType) {
+        AppState.proposedDatesByType = {
+          dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          moscosos: "Día 15 de Mayo",
+          vacaciones: "Del 1 al 15 de Agosto"
+        };
+      }
+      const datesInput = document.getElementById("req-proposed-dates");
+      if (datesInput) {
+        datesInput.value = AppState.proposedDatesByType[type] || "";
+      }
+      renderRequestLetter();
+    });
+  }
+
+  // Fechas propuestas para la solicitud activa
   const reqDatesInput = document.getElementById("req-proposed-dates");
   if (reqDatesInput) {
     reqDatesInput.addEventListener("input", (e) => {
-      AppState.config.proposedDates = e.target.value;
+      const type = AppState.requestType || "dci";
+      if (!AppState.proposedDatesByType) {
+        AppState.proposedDatesByType = {
+          dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          moscosos: "Día 15 de Mayo",
+          vacaciones: "Del 1 al 15 de Agosto"
+        };
+      }
+      AppState.proposedDatesByType[type] = e.target.value;
+      if (type === "dci") {
+        AppState.config.proposedDates = e.target.value;
+      }
       renderRequestLetter();
       triggerSave();
     });
