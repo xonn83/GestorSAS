@@ -1204,8 +1204,7 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-slate-100/40 cell-actual">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
-        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-accum">-</td>
-        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-dci-net">-</td>
+        <td class="py-2.5 px-3 text-center font-mono text-slate-400 cell-accum">-</td>
       `;
 
       tr.addEventListener("click", () => {
@@ -1235,8 +1234,7 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dciHoras ? (row.dciHoras + 'h') : '0h'}</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-actual">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
-        <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-accum">-</td>
-        <td class="py-2.5 px-3 text-right font-mono text-slate-400 cell-dci-net font-black">-</td>
+        <td class="py-2.5 px-3 text-center font-mono text-slate-400 cell-accum font-black">-</td>
       `;
 
       tr.addEventListener("click", () => {
@@ -1260,7 +1258,6 @@ function updateTableComputedCells() {
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
   const hV = parseFloat(AppState.config.hoursV) || 7.0;
   const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
-  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
 
   let totActiveDays = 0;
   let totReqHours = 0;
@@ -1305,12 +1302,7 @@ function updateTableComputedCells() {
         const cellAcc = tr.querySelector(".cell-accum");
         if (cellAcc) {
           cellAcc.textContent = "-";
-          cellAcc.className = "py-2.5 px-2 text-center font-mono font-black cell-accum text-slate-400";
-        }
-        const cellDciNet = tr.querySelector(".cell-dci-net");
-        if (cellDciNet) {
-          cellDciNet.textContent = "-";
-          cellDciNet.className = "py-2.5 px-3 text-right font-mono cell-dci-net text-slate-400";
+          cellAcc.className = "py-2.5 px-3 text-center font-mono font-black cell-accum text-slate-400";
         }
       }
       return;
@@ -1346,12 +1338,7 @@ function updateTableComputedCells() {
         const cellAcc = tr.querySelector(".cell-accum");
         if (cellAcc) {
           cellAcc.textContent = "-";
-          cellAcc.className = "py-2.5 px-2 text-center font-mono text-slate-400 cell-accum";
-        }
-        const cellDciNet = tr.querySelector(".cell-dci-net");
-        if (cellDciNet) {
-          cellDciNet.textContent = "-";
-          cellDciNet.className = "py-2.5 px-3 text-right font-mono cell-dci-net text-slate-400";
+          cellAcc.className = "py-2.5 px-3 text-center font-mono text-slate-400 cell-accum";
         }
       }
       return;
@@ -1409,27 +1396,12 @@ function updateTableComputedCells() {
       if (cellAcc) {
         cellAcc.textContent = `${signAccum}${runningAccumBalance.toFixed(1)} h`;
         const accColor = runningAccumBalance > 0.05 ? 'text-emerald-700' : (runningAccumBalance < -0.05 ? 'text-rose-600' : 'text-slate-700');
-        cellAcc.className = `py-2.5 px-2 text-center font-mono font-black cell-accum ${accColor}`;
-      }
-
-      const cellDciNet = tr.querySelector(".cell-dci-net");
-      if (cellDciNet) {
-        const currentDciNetHours = Math.max(0, parseFloat(runningAccumBalance.toFixed(1)));
-        if (currentDciNetHours > 0) {
-          const dciDays = Math.floor(currentDciNetHours / hDCI);
-          cellDciNet.textContent = `+${currentDciNetHours.toFixed(1)} h (${dciDays} d)`;
-          cellDciNet.className = "py-2.5 px-3 text-right font-mono font-black text-cyan-900 bg-cyan-50/60 cell-dci-net";
-        } else {
-          cellDciNet.textContent = "0.0 h (0 d)";
-          cellDciNet.className = "py-2.5 px-3 text-right font-mono font-bold text-slate-400 cell-dci-net";
-        }
+        cellAcc.className = `py-2.5 px-3 text-center font-mono font-black cell-accum ${accColor}`;
       }
     }
   });
 
   const accumSign = runningAccumBalance > 0.05 ? "+" : "";
-  const finalDciHours = Math.max(0, parseFloat(runningAccumBalance.toFixed(1)));
-  const finalDciDays = Math.floor(finalDciHours / hDCI);
 
   const tfoot = document.getElementById("gerhonte-table-totals");
   if (tfoot) {
@@ -1449,11 +1421,8 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
       </td>
-      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
+      <td class="py-3 px-3 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
-      </td>
-      <td class="py-3 px-3 text-right font-mono font-black text-xs ${finalDciHours > 0 ? 'text-cyan-950 bg-cyan-100' : 'text-slate-500 bg-slate-100'}">
-        ${finalDciHours > 0 ? `+${finalDciHours.toFixed(1)} h (${finalDciDays} d)` : '0.0 h (0 d)'}
       </td>
     `;
   }
@@ -1864,7 +1833,6 @@ export function exportarPDF() {
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
   const hV = parseFloat(AppState.config.hoursV) || 7.0;
   const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
-  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
 
   let totActiveDays = 0;
   let totReqHours = 0;
@@ -1884,7 +1852,7 @@ export function exportarPDF() {
     const reqHours = getMonthRequiredHours(year, m);
 
     if (activeDays === 0) {
-      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "0.0 h", "-", "-", "0.0 h", "-", "0.0 h", "-", "-", "-"];
+      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "0.0 h", "-", "-", "0.0 h", "-", "0.0 h", "-", "-"];
     }
 
     const hasShifts = (
@@ -1906,7 +1874,6 @@ export function exportarPDF() {
         "0 h",
         "0.0 h",
         "Pendiente",
-        "-",
         "-"
       ];
     }
@@ -1933,11 +1900,6 @@ export function exportarPDF() {
     const signMonth = monthBal > 0.05 ? "+" : "";
     const signAccum = runningAccum > 0.05 ? "+" : "";
 
-    const rowDciHours = Math.max(0, parseFloat(runningAccum.toFixed(1)));
-    const dciNetText = rowDciHours > 0
-      ? `+${rowDciHours.toFixed(1)} h (${Math.floor(rowDciHours / hDCI)} d)`
-      : "0.0 h (0 d)";
-
     return [
       MONTH_NAMES[m],
       `${activeDays} d`,
@@ -1952,14 +1914,11 @@ export function exportarPDF() {
       dciH ? `${dciH} h` : "0 h",
       `${actHours.toFixed(1)} h`,
       `${signMonth}${monthBal.toFixed(1)} h`,
-      `${signAccum}${runningAccum.toFixed(1)} h`,
-      dciNetText
+      `${signAccum}${runningAccum.toFixed(1)} h`
     ];
   });
 
   const totalAccumSign = runningAccum > 0.05 ? "+" : "";
-  const finalPdfDci = Math.max(0, parseFloat(runningAccum.toFixed(1)));
-  const finalPdfDciDays = Math.floor(finalPdfDci / hDCI);
   const tableFoot = [[
     `TOTAL AUDITADO (${year})`,
     `${totActiveDays} d`,
@@ -1974,14 +1933,13 @@ export function exportarPDF() {
     `${totDciHoras} h`,
     `${totActualHours.toFixed(1)} h`,
     `${totalAccumSign}${runningAccum.toFixed(1)} h`,
-    `${totalAccumSign}${runningAccum.toFixed(1)} h`,
-    finalPdfDci > 0 ? `+${finalPdfDci.toFixed(1)} h (${finalPdfDciDays} d)` : "0.0 h (0 d)"
+    `${totalAccumSign}${runningAccum.toFixed(1)} h`
   ]];
 
   applyAutoTable(doc, {
     startY: 82,
     margin: { left: margin, right: margin },
-    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "LD", "Perm.", "DCI", "Efect.", "Saldo", "Acum.", "DCI Pend."]],
+    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "LD", "Perm.", "DCI", "Efect.", "Saldo", "Acum."]],
     body: tableBody,
     foot: tableFoot,
     theme: "grid",
@@ -2010,26 +1968,25 @@ export function exportarPDF() {
       halign: "center"
     },
     columnStyles: {
-      0: { halign: "left", fontStyle: "bold", cellWidth: 19 },
+      0: { halign: "left", fontStyle: "bold", cellWidth: 20 },
       1: { cellWidth: 10 },
       2: { cellWidth: 13 },
       3: { cellWidth: 8, fontStyle: "bold" },
       4: { cellWidth: 8, fontStyle: "bold" },
       5: { cellWidth: 8, fontStyle: "bold" },
-      6: { cellWidth: 13, fontStyle: "bold" },
+      6: { cellWidth: 14, fontStyle: "bold" },
       7: { cellWidth: 8, fontStyle: "bold" },
       8: { cellWidth: 8, fontStyle: "bold" },
-      9: { cellWidth: 13, fontStyle: "bold" },
+      9: { cellWidth: 14, fontStyle: "bold" },
       10: { cellWidth: 10, fontStyle: "bold" },
-      11: { cellWidth: 14, fontStyle: "bold" },
-      12: { cellWidth: 14, fontStyle: "bold" },
-      13: { cellWidth: 15, fontStyle: "bold" },
-      14: { cellWidth: 23, fontStyle: "bold", halign: "right" }
+      11: { cellWidth: 15, fontStyle: "bold" },
+      12: { cellWidth: 15, fontStyle: "bold" },
+      13: { cellWidth: 16, fontStyle: "bold" }
     },
     didParseCell: function(data) {
       if (data.section === "body") {
         const text = data.cell.raw || "";
-        if (data.column.index === 12 || data.column.index === 13 || data.column.index === 14) {
+        if (data.column.index === 12 || data.column.index === 13) {
           if (typeof text === "string" && text.startsWith("+")) {
             data.cell.styles.textColor = [21, 128, 61];
           } else if (typeof text === "string" && text.startsWith("-") && text !== "-") {
@@ -2080,10 +2037,9 @@ export function exportarCSV() {
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
   const hV = parseFloat(AppState.config.hoursV) || 7.0;
   const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
-  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
 
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);DCI Netos Pendientes (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
 
   let runningAccum = 0;
   let totVacaciones = 0;
@@ -2101,9 +2057,9 @@ export function exportarCSV() {
     );
 
     if (activeDays === 0) {
-      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0.0;0;0;0.0;0;0.0;0.0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
+      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0.0;0;0;0.0;0;0.0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
     } else if (!hasShifts) {
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;-;Pendiente de rellenar\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;Pendiente de rellenar\r\n`;
     } else {
       const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
       const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
@@ -2112,9 +2068,7 @@ export function exportarCSV() {
       const monthBal = parseFloat((actHours - reqHours).toFixed(1));
       runningAccum += monthBal;
 
-      const dciNetHours = Math.max(0, parseFloat(runningAccum.toFixed(1)));
-      const dciNet = dciNetHours > 0 ? dciNetHours.toFixed(1) : "0.0";
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};${dciNet};Auditado\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};Auditado\r\n`;
     }
   });
 
