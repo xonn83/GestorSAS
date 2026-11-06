@@ -1401,8 +1401,6 @@ function updateTableComputedCells() {
     }
   });
 
-  const accumSign = runningAccumBalance > 0.05 ? "+" : "";
-
   const tfoot = document.getElementById("gerhonte-table-totals");
   if (tfoot) {
     tfoot.innerHTML = `
@@ -1418,12 +1416,8 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">${totPermitHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDciHoras} h</td>
       <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
-        ${accumSign}${runningAccumBalance.toFixed(1)} h
-      </td>
-      <td class="py-3 px-3 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
-        ${accumSign}${runningAccumBalance.toFixed(1)} h
-      </td>
+      <td class="py-3 px-2 font-mono text-center text-slate-400">-</td>
+      <td class="py-3 px-3 font-mono text-center text-slate-400">-</td>
     `;
   }
 }
@@ -1918,7 +1912,6 @@ export function exportarPDF() {
     ];
   });
 
-  const totalAccumSign = runningAccum > 0.05 ? "+" : "";
   const tableFoot = [[
     `TOTAL AUDITADO (${year})`,
     `${totActiveDays} d`,
@@ -1932,8 +1925,8 @@ export function exportarPDF() {
     String(totPermitHours.toFixed(1)) + " h",
     `${totDciHoras} h`,
     `${totActualHours.toFixed(1)} h`,
-    `${totalAccumSign}${runningAccum.toFixed(1)} h`,
-    `${totalAccumSign}${runningAccum.toFixed(1)} h`
+    "-",
+    "-"
   ]];
 
   applyAutoTable(doc, {
