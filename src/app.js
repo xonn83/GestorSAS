@@ -274,9 +274,11 @@ export function getMonthActiveContractDays(year, month) {
 export function getMonthRequiredHours(year, month) {
   const activeDays = getMonthActiveContractDays(year, month);
   if (activeDays === 0) return 0.0;
-  const yearDays = getDaysInYear(year);
-  const baseHours = parseFloat(AppState.config.baseHours) || 1483;
-  return parseFloat(((activeDays / yearDays) * baseHours).toFixed(1));
+  const daysInMonth = getDaysInMonth(year, month);
+  const baseHours = parseFloat(AppState.config.baseHours) || 1540;
+  const monthlyBase = baseHours / 11;
+  const monthRatio = daysInMonth > 0 ? (activeDays / daysInMonth) : 0;
+  return parseFloat((monthlyBase * monthRatio).toFixed(1));
 }
 
 export function isDateInsideContract(dateStr) {
@@ -1079,23 +1081,21 @@ function renderCalendar() {
   const monthReq = getMonthRequiredHours(year, month);
   const monthAct = getMonthActualHours(month);
   const monthBal = parseFloat((monthAct - monthReq).toFixed(1));
-  const sign = monthBal > 0 ? "+" : "";
+  const sign = monthBal > 0.05 ? "+" : "";
 
-  document.getElementById("cal-month-worked").textContent = `${monthAct.toFixed(1)}h`;
-  document.getElementById("cal-month-required").textContent = `${monthReq.toFixed(1)}h`;
+  document.getElementById("cal-month-worked").textContent = `${monthAct.toFixed(1).replace(".", ",")} h`;
+  document.getElementById("cal-month-required").textContent = `${monthReq.toFixed(1).replace(".", ",")} h`;
   const balEl = document.getElementById("cal-month-balance");
-  balEl.textContent = `${sign}${monthBal.toFixed(1)}h`;
-  balEl.className = monthBal >= 0 ? "font-black font-mono text-emerald-600" : "font-black font-mono text-rose-600";
+  balEl.textContent = `${sign}${monthBal.toFixed(1).replace(".", ",")} h`;
+  balEl.className = monthBal > 0.05
+    ? "font-black font-mono text-emerald-600"
+    : (monthBal < -0.05 ? "font-black font-mono text-rose-600" : "font-black font-mono text-slate-800");
 
-  document.getElementById("cal-month-breakdown").innerHTML = `
-    <span class="px-2 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-200 font-mono">${mCount} M</span>
-    <span class="px-2 py-0.5 rounded bg-orange-100 text-orange-900 border border-orange-200 font-mono">${tCount} T</span>
-    <span class="px-2 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-200 font-mono">${nCount} N</span>
-    ${mnCount > 0 ? `<span class="px-2 py-0.5 rounded bg-fuchsia-100 text-fuchsia-950 border border-fuchsia-300 font-mono font-bold">${mnCount} MN (Doble)</span>` : ''}
-    <span class="px-2 py-0.5 rounded bg-emerald-100 text-emerald-900 border border-emerald-200 font-mono">${vCount} V</span>
-    <span class="px-2 py-0.5 rounded bg-purple-100 text-purple-900 border border-purple-200 font-mono">${ldCount} LD</span>
-    <span class="px-2 py-0.5 rounded bg-cyan-100 text-cyan-900 border border-cyan-200 font-mono">${dciCount} DCI</span>
-  `;
+  const breakdownEl = document.getElementById("cal-month-breakdown");
+  if (breakdownEl) {
+    breakdownEl.innerHTML = "";
+    breakdownEl.className = "hidden";
+  }
 }
 
 function applyBrushToDate(dateStr) {
@@ -1427,13 +1427,15 @@ function updateTableComputedCells() {
       const cellBal = tr.querySelector(".cell-balance");
       if (cellBal) {
         cellBal.textContent = `${signMonth}${monthBal.toFixed(1)}`;
-        cellBal.className = `py-2.5 px-2 text-center font-mono font-bold cell-balance ${monthBal >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        const balColor = monthBal > 0.05 ? 'text-emerald-700' : (monthBal < -0.05 ? 'text-rose-600' : 'text-slate-700');
+        cellBal.className = `py-2.5 px-2 text-center font-mono font-bold cell-balance ${balColor}`;
       }
 
       const cellAcc = tr.querySelector(".cell-accum");
       if (cellAcc) {
         cellAcc.textContent = `${signAccum}${runningAccumBalance.toFixed(1)} h`;
-        cellAcc.className = `py-2.5 px-2 text-center font-mono font-black cell-accum ${runningAccumBalance >= 0 ? 'text-emerald-700' : 'text-rose-600'}`;
+        const accColor = runningAccumBalance > 0.05 ? 'text-emerald-700' : (runningAccumBalance < -0.05 ? 'text-rose-600' : 'text-slate-700');
+        cellAcc.className = `py-2.5 px-2 text-center font-mono font-black cell-accum ${accColor}`;
       }
 
       const cellDciNet = tr.querySelector(".cell-dci-net");
@@ -1478,10 +1480,10 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">${totPermitHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDciHoras} h</td>
       <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
+      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
       </td>
-      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance >= 0 ? 'text-emerald-800' : 'text-rose-700'}">
+      <td class="py-3 px-2 font-mono text-center font-black ${ runningAccumBalance > 0.05 ? 'text-emerald-800' : (runningAccumBalance < -0.05 ? 'text-rose-700' : 'text-slate-800')}">
         ${accumSign}${runningAccumBalance.toFixed(1)} h
       </td>
       <td class="py-3 px-3 text-right font-mono font-black text-xs ${finalDciHours > 0 ? 'text-cyan-950 bg-cyan-100' : 'text-slate-500 bg-slate-100'}">
