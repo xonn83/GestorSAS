@@ -2511,57 +2511,162 @@ function initApp() {
   if (linkToRegister) linkToRegister.addEventListener("click", () => setAuthTab("register"));
   if (linkToLogin) linkToLogin.addEventListener("click", () => setAuthTab("login"));
 
-  // Login Submit
+  // Configuración de visualización de contraseñas (botón del ojo)
+  function setupPasswordToggle(btnId, inputId, iconEyeId, iconEyeOffId) {
+    const btn = document.getElementById(btnId);
+    const input = document.getElementById(inputId);
+    const iconEye = document.getElementById(iconEyeId);
+    const iconEyeOff = document.getElementById(iconEyeOffId);
+
+    if (btn && input) {
+      btn.addEventListener("click", () => {
+        const isPassword = input.type === "password";
+        input.type = isPassword ? "text" : "password";
+        if (iconEye && iconEyeOff) {
+          iconEye.classList.toggle("hidden", isPassword);
+          iconEyeOff.classList.toggle("hidden", !isPassword);
+        }
+      });
+    }
+  }
+
+  setupPasswordToggle("btn-toggle-login-password", "login-password", "icon-eye-login", "icon-eye-off-login");
+  setupPasswordToggle("btn-toggle-reg-password", "reg-password", "icon-eye-reg", "icon-eye-off-reg");
+
+  // Función para bloquear/desbloquear y hacer no editables los campos durante el login
+  function setLoginFormLoading(isLoading) {
+    const emailInput = document.getElementById("login-email");
+    const passInput = document.getElementById("login-password");
+    const submitBtn = document.getElementById("btn-submit-login");
+    const togglePassBtn = document.getElementById("btn-toggle-login-password");
+    const tabLogin = document.getElementById("tab-auth-login");
+    const tabRegister = document.getElementById("tab-auth-register");
+    const linkToReg = document.getElementById("link-to-register");
+
+    if (emailInput) {
+      emailInput.disabled = isLoading;
+      emailInput.readOnly = isLoading;
+      if (isLoading) {
+        emailInput.classList.add("bg-slate-100", "cursor-not-allowed", "opacity-75");
+      } else {
+        emailInput.classList.remove("bg-slate-100", "cursor-not-allowed", "opacity-75");
+      }
+    }
+
+    if (passInput) {
+      passInput.disabled = isLoading;
+      passInput.readOnly = isLoading;
+      if (isLoading) {
+        passInput.classList.add("bg-slate-100", "cursor-not-allowed", "opacity-75");
+      } else {
+        passInput.classList.remove("bg-slate-100", "cursor-not-allowed", "opacity-75");
+      }
+    }
+
+    if (togglePassBtn) {
+      togglePassBtn.disabled = isLoading;
+      if (isLoading) togglePassBtn.classList.add("opacity-50", "pointer-events-none");
+      else togglePassBtn.classList.remove("opacity-50", "pointer-events-none");
+    }
+
+    if (tabLogin) tabLogin.disabled = isLoading;
+    if (tabRegister) tabRegister.disabled = isLoading;
+    if (linkToReg) {
+      if (isLoading) linkToReg.classList.add("pointer-events-none", "opacity-50");
+      else linkToReg.classList.remove("pointer-events-none", "opacity-50");
+    }
+
+    if (submitBtn) {
+      submitBtn.disabled = isLoading;
+      if (isLoading) {
+        submitBtn.classList.add("opacity-80", "cursor-not-allowed");
+        submitBtn.innerHTML = `
+          <svg class="animate-spin h-4 w-4 text-white shrink-0" fill="none" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+          </svg>
+          <span>Conectando con el servicio SAS...</span>
+        `;
+      } else {
+        submitBtn.classList.remove("opacity-80", "cursor-not-allowed");
+        submitBtn.innerHTML = `
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+          <span>Acceder a Mi Cuadrante</span>
+        `;
+      }
+    }
+  }
+
+  // Login Submit con timeout y protección de campos no editables
   if (formLogin) {
     formLogin.addEventListener("submit", async (e) => {
       e.preventDefault();
       clearAuthError();
       const email = document.getElementById("login-email").value.trim();
       const password = document.getElementById("login-password").value;
-      const submitBtn = document.getElementById("btn-submit-login");
+
+      setLoginFormLoading(true);
+
+      const LOGIN_TIMEOUT_MS = 12000; // 12 segundos de margen para conexiones móviles/lentas
+      let timeoutId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          const timeoutErr = new Error("Tiempo de espera agotado al conectar con el servidor.");
+          timeoutErr.code = "auth/timeout";
+          reject(timeoutErr);
+        }, LOGIN_TIMEOUT_MS);
+      });
 
       try {
-        submitBtn.disabled = true;
-        submitBtn.textContent = "Verificando acceso...";
         if (auth) {
-          await signInWithEmailAndPassword(auth, email, password);
+          await Promise.race([
+            signInWithEmailAndPassword(auth, email, password),
+            timeoutPromise
+          ]);
+          // Éxito: onAuthStateChanged gestionará la sesión y ocultará el portal de login.
         } else {
           throw new Error("No hay conexión con el servicio de autenticación");
         }
       } catch (err) {
         console.warn("Login Error / Offline Fallback Check:", err);
+
+        // Seguridad estricta: asegurar que el formulario de login SIGUE visible en caso de fallo o timeout
+        if (authPortal) {
+          authPortal.classList.remove("hidden");
+        }
+
         const savedAcc = getLocalAccount(email);
 
-        // Si la cuenta existe en almacenamiento local y la clave coincide, dar acceso inmediato:
-        if (savedAcc && savedAcc.password === password) {
+        // Si la cuenta existe en almacenamiento local y la clave coincide exactamente, dar acceso offline:
+        if (savedAcc && savedAcc.password && savedAcc.password === password) {
           activateUserSession(savedAcc);
-          showToast("¡Sesión iniciada correctamente!", "success");
+          showToast("¡Sesión iniciada correctamente (modo local)! Cuadrante activado.", "success");
           return;
         }
 
         let friendly = "Error de acceso: ";
-        if (savedAcc && savedAcc.password !== password) {
-          friendly = "Contraseña incorrecta para este usuario.";
+        if (err.code === "auth/timeout") {
+          friendly = "Tiempo de espera agotado al conectar con el servicio SAS. Comprueba tu conexión a Internet o inténtalo de nuevo.";
+        } else if (savedAcc && savedAcc.password && savedAcc.password !== password) {
+          friendly = "Contraseña incorrecta para este usuario. Por favor, revísala e inténtalo de nuevo.";
         } else if (err.code === "auth/invalid-credential" || err.code === "auth/wrong-password" || err.code === "auth/user-not-found") {
           friendly = "Usuario o contraseña no válidos. Si no tienes cuenta aún en este dispositivo, pulsa 'Nuevo Registro'.";
         } else if (err.code === "auth/too-many-requests") {
-          friendly = "Demasiados intentos. Espera unos momentos.";
+          friendly = "Demasiados intentos fallidos. Por seguridad, espera unos momentos antes de reintentarlo.";
         } else if (err.code === "auth/unauthorized-domain") {
           friendly = `Dominio '${window.location.hostname}' no autorizado en Firebase. Regístrate en 'Nuevo Registro' para activar el gestor en este dispositivo.`;
         } else if (err.code === "auth/operation-not-allowed") {
           friendly = `El método de acceso por correo no está habilitado en Firebase (${firebaseConfig.projectId}). Regístrate en 'Nuevo Registro'.`;
         } else if (err.code === "auth/network-request-failed") {
-          friendly = "Error de red al conectar con Firebase. Si aún no te has registrado en este dispositivo, pulsa 'Nuevo Registro'.";
+          friendly = "Error de red al conectar con el servicio SAS. Comprueba tu conexión a Internet e inténtalo de nuevo.";
         } else {
           friendly += (err.message || "revisa los datos introducidos");
         }
         showAuthError(friendly);
       } finally {
-        submitBtn.disabled = false;
-        submitBtn.innerHTML = `
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
-          <span>Acceder a Mi Cuadrante</span>
-        `;
+        if (timeoutId) clearTimeout(timeoutId);
+        // Desbloquear siempre los campos para que permanezcan editables tras el intento
+        setLoginFormLoading(false);
       }
     });
   }
