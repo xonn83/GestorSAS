@@ -260,12 +260,12 @@ export function getContractRequiredHoursTotal(targetYear = AppState.calendarYear
 export function getMonthActiveContractDays(year, month) {
   if (!AppState.config.startDate) return 0;
   const start = parseISODate(AppState.config.startDate);
-  const end = AppState.config.endDate ? parseISODate(AppState.config.endDate) : new Date(year + 5, 11, 31);
+  const end = AppState.config.endDate ? parseISODate(AppState.config.endDate) : null;
   const daysInMonth = getDaysInMonth(year, month);
   let activeCount = 0;
   for (let day = 1; day <= daysInMonth; day++) {
     const current = new Date(year, month, day);
-    if (current >= start && current <= end) {
+    if (current >= start && (!end || current <= end)) {
       activeCount++;
     }
   }
@@ -286,8 +286,8 @@ export function isDateInsideContract(dateStr) {
   if (!AppState.config.startDate) return true;
   const d = parseISODate(dateStr);
   const start = parseISODate(AppState.config.startDate);
-  const end = AppState.config.endDate ? parseISODate(AppState.config.endDate) : new Date(start.getFullYear() + 5, 11, 31);
-  return d >= start && d <= end;
+  const end = AppState.config.endDate ? parseISODate(AppState.config.endDate) : null;
+  return d >= start && (!end || d <= end);
 }
 
 export function syncCalendarMonthToTable(month) {
@@ -497,9 +497,70 @@ export function getMonthActualHours(month) {
 // PERSISTENCIA EN NUBE (PLAN SPARK GRATUITO) Y LOCAL
 // -------------------------------------------------------------
 let debounceSaveTimeout = null;
+let hasPendingCloudChanges = false;
+let isCloudSaving = false;
 
-export function triggerSave() {
-  // Siempre guarda en localStorage de forma inmediata
+export function getPendingCloudChanges() {
+  return hasPendingCloudChanges;
+}
+
+export async function flushCloudSave() {
+  if (!AppState.currentUser || !db || AppState.isLocalMode) return;
+  if (debounceSaveTimeout) {
+    clearTimeout(debounceSaveTimeout);
+    debounceSaveTimeout = null;
+  }
+  if (!hasPendingCloudChanges && !isCloudSaving) return;
+
+  const statusEl = document.getElementById("cloud-status-text");
+  if (statusEl) statusEl.textContent = "Nube: Guardando...";
+
+  isCloudSaving = true;
+  try {
+    const uid = AppState.currentUser.uid;
+    await setDoc(doc(db, "users", uid), {
+      userId: uid,
+      email: AppState.currentUser.email || "",
+      workerName: AppState.config.workerName,
+      category: AppState.config.category,
+      center: AppState.config.center,
+      service: AppState.config.service || "",
+      dni: AppState.config.dni || "",
+      updatedAt: new Date().toISOString()
+    }, { merge: true });
+
+    await setDoc(doc(db, "users", uid, "data", "cuadrante"), {
+      userId: uid,
+      startDate: AppState.config.startDate,
+      endDate: AppState.config.endDate || "",
+      regime: AppState.config.regime,
+      baseHours: parseFloat(AppState.config.baseHours) || 1483,
+      hoursM: parseFloat(AppState.config.hoursM) || 7.0,
+      hoursT: parseFloat(AppState.config.hoursT) || 7.0,
+      hoursN: parseFloat(AppState.config.hoursN) || 10.0,
+      hoursS: 0.0,
+      hoursV: parseFloat(AppState.config.hoursV) || 7.0,
+      hoursLD: parseFloat(AppState.config.hoursLD) || 7.0,
+      hoursDCI: parseFloat(AppState.config.hoursDCI) || 7.0,
+      proposedDates: AppState.config.proposedDates || "",
+      calendarShifts: AppState.calendarShifts || {},
+      monthlyTableData: AppState.monthlyTableData,
+      calendarYear: AppState.calendarYear,
+      updatedAt: new Date().toISOString()
+    });
+
+    hasPendingCloudChanges = false;
+    if (statusEl) statusEl.textContent = "Nube: Sincronizado";
+  } catch (err) {
+    console.warn("Firestore save fallback to local:", err);
+    if (statusEl) statusEl.textContent = "Modo: Local Activo";
+  } finally {
+    isCloudSaving = false;
+  }
+}
+
+export function triggerSave(immediate = false) {
+  // Siempre guarda en localStorage de forma inmediata (< 1ms)
   try {
     const localKey = AppState.currentUser ? `sas_jornada_${AppState.currentUser.uid}` : "sas_jornada_local";
     localStorage.setItem(localKey, JSON.stringify({
@@ -514,50 +575,20 @@ export function triggerSave() {
 
   // Si hay usuario en la nube, sincroniza en Firestore
   if (AppState.currentUser && db && !AppState.isLocalMode) {
+    hasPendingCloudChanges = true;
+
+    if (immediate) {
+      flushCloudSave();
+      return;
+    }
+
     const statusEl = document.getElementById("cloud-status-text");
-    if (statusEl) statusEl.textContent = "Nube: Guardando...";
+    if (statusEl) statusEl.textContent = "Nube: Pendiente (guardado en 30s)";
 
     if (debounceSaveTimeout) clearTimeout(debounceSaveTimeout);
-    debounceSaveTimeout = setTimeout(async () => {
-      try {
-        const uid = AppState.currentUser.uid;
-        await setDoc(doc(db, "users", uid), {
-          userId: uid,
-          email: AppState.currentUser.email || "",
-          workerName: AppState.config.workerName,
-          category: AppState.config.category,
-          center: AppState.config.center,
-          service: AppState.config.service || "",
-          dni: AppState.config.dni || "",
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-
-        await setDoc(doc(db, "users", uid, "data", "cuadrante"), {
-          userId: uid,
-          startDate: AppState.config.startDate,
-          endDate: AppState.config.endDate,
-          regime: AppState.config.regime,
-          baseHours: parseFloat(AppState.config.baseHours) || 1483,
-          hoursM: parseFloat(AppState.config.hoursM) || 7.0,
-          hoursT: parseFloat(AppState.config.hoursT) || 7.0,
-          hoursN: parseFloat(AppState.config.hoursN) || 10.0,
-          hoursS: 0.0,
-          hoursV: parseFloat(AppState.config.hoursV) || 7.0,
-          hoursLD: parseFloat(AppState.config.hoursLD) || 7.0,
-          hoursDCI: parseFloat(AppState.config.hoursDCI) || 7.0,
-          proposedDates: AppState.config.proposedDates || "",
-          calendarShifts: AppState.calendarShifts || {},
-          monthlyTableData: AppState.monthlyTableData,
-          calendarYear: AppState.calendarYear,
-          updatedAt: new Date().toISOString()
-        });
-
-        if (statusEl) statusEl.textContent = "Nube: Sincronizado";
-      } catch (err) {
-        console.warn("Firestore save fallback to local:", err);
-        if (statusEl) statusEl.textContent = "Modo: Local Activo";
-      }
-    }, 600);
+    debounceSaveTimeout = setTimeout(() => {
+      flushCloudSave();
+    }, 30000); // 30 segundos de inactividad
   }
 }
 
@@ -588,7 +619,7 @@ export async function loadUserData(user) {
     if (cuadranteSnap.exists()) {
       const cData = cuadranteSnap.data();
       if (cData.startDate) AppState.config.startDate = cData.startDate;
-      if (cData.endDate) AppState.config.endDate = cData.endDate;
+      if (cData.endDate !== undefined) AppState.config.endDate = cData.endDate || "";
       if (cData.regime) AppState.config.regime = cData.regime;
       if (cData.baseHours) AppState.config.baseHours = cData.baseHours;
       if (cData.calendarShifts) AppState.calendarShifts = cData.calendarShifts;
@@ -1211,6 +1242,9 @@ function renderTable() {
       `;
 
       tr.addEventListener("click", () => {
+        if (hasPendingCloudChanges) {
+          flushCloudSave();
+        }
         clearActiveBrush();
         AppState.calendarMonth = m;
         const calTab = document.querySelector('.tab-btn[data-tab="calendar"]');
@@ -1412,8 +1446,13 @@ function renderRequestLetter() {
   const category = AppState.config.category || "PROFESIONAL SANITARIO";
   const center = AppState.config.center || "HOSPITAL / DISTRITO SAS";
   const service = AppState.config.service || "UNIDAD ASISTENCIAL";
-  const startDate = AppState.config.startDate || "01/01/2026";
-  const endDate = AppState.config.endDate || "31/12/2026";
+  const sRaw = AppState.config.startDate || "2026-01-01";
+  const startDate = sRaw.includes("-") ? sRaw.split("-").reverse().join("/") : sRaw;
+  const eRaw = AppState.config.endDate;
+  const endDate = eRaw ? (eRaw.includes("-") ? eRaw.split("-").reverse().join("/") : eRaw) : "";
+  const periodText = endDate 
+    ? `con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate}` 
+    : `con nombramiento de carácter indefinido (plaza fija) con efectos desde el ${startDate}`;
 
   const datesLabel = document.getElementById("req-dates-label");
   const datesInput = document.getElementById("req-proposed-dates");
@@ -1467,7 +1506,7 @@ UNIDAD / SERVICIO: ${service.toUpperCase()}
 
 ASUNTO: SOLICITUD REGLAMENTARIA DE DESCANSO COMPENSATORIO POR EXCESO DE JORNADA (DCI)
 
-D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate},
+D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
 EXPONE:
 
@@ -1510,7 +1549,7 @@ UNIDAD / SERVICIO: ${service.toUpperCase()}
 
 ASUNTO: SOLICITUD DE DÍAS POR ASUNTOS PARTICULARES (DÍAS DE LIBRE DISPOSICIÓN / MOSCOSOS)
 
-D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate},
+D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
 EXPONE:
 
@@ -1551,7 +1590,7 @@ UNIDAD / SERVICIO: ${service.toUpperCase()}
 
 ASUNTO: SOLICITUD REGLAMENTARIA DE VACACIONES ANUALES
 
-D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, con periodo de nombramiento comprendido entre el ${startDate} y el ${endDate},
+D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
 EXPONE:
 
@@ -1595,8 +1634,11 @@ export function syncConfigInputsFromState() {
     const el = document.getElementById(id);
     if (el) el.value = val;
   };
-  setVal("cfg-start-date", AppState.config.startDate);
-  setVal("cfg-end-date", AppState.config.endDate);
+  const s = AppState.config.startDate ? AppState.config.startDate.split("-").reverse().join("/") : "";
+  const e = AppState.config.endDate ? AppState.config.endDate.split("-").reverse().join("/") : "";
+
+  setVal("cfg-start-date", s);
+  setVal("cfg-end-date", e || "Indefinido (Plaza fija)");
   setVal("cfg-regime", AppState.config.regime);
   setVal("cfg-base-hours", AppState.config.baseHours);
   setVal("cfg-category", AppState.config.category);
@@ -1615,9 +1657,9 @@ export function syncConfigInputsFromState() {
   // Actualizar datos del resumen de la tarjeta colapsable
   const sumDates = document.getElementById("summary-nom-dates");
   if (sumDates) {
-    const s = AppState.config.startDate ? AppState.config.startDate.split("-").reverse().join("/") : "";
-    const e = AppState.config.endDate ? AppState.config.endDate.split("-").reverse().join("/") : "";
-    sumDates.textContent = `${s} al ${e}`;
+    sumDates.textContent = e 
+      ? `${s} al ${e}` 
+      : (s ? `Desde ${s} (Plaza fija / Indefinido)` : "Plaza fija (Indefinido)");
   }
   const sumRegime = document.getElementById("summary-nom-regime");
   if (sumRegime) {
@@ -1648,7 +1690,19 @@ export function syncEditModalInputsFromState() {
   setVal("edit-center", AppState.config.center);
   setVal("edit-service", AppState.config.service);
   setVal("edit-start-date", AppState.config.startDate);
-  setVal("edit-end-date", AppState.config.endDate);
+
+  const isNoEnd = !AppState.config.endDate;
+  const chkNoEnd = document.getElementById("edit-no-end-date");
+  const editEnd = document.getElementById("edit-end-date");
+  if (chkNoEnd && editEnd) {
+    chkNoEnd.checked = isNoEnd;
+    editEnd.disabled = isNoEnd;
+    editEnd.required = !isNoEnd;
+    editEnd.value = isNoEnd ? "" : AppState.config.endDate;
+  } else {
+    setVal("edit-end-date", AppState.config.endDate);
+  }
+
   setVal("edit-regime", AppState.config.regime);
   setVal("edit-base-hours", AppState.config.baseHours);
 }
@@ -1798,9 +1852,9 @@ export function exportarPDF() {
   const center = cfg.center ? cfg.center.trim() : "Centro Sanitario SAS";
   const service = cfg.service ? cfg.service.trim() : "—";
   const regimeText = cfg.regime === "rotatorio" ? "Turno Rotatorio (M/T/N)" : "Turno Diurno (Lunes a Viernes)";
-  const periodText = (cfg.startDate || cfg.endDate)
-    ? `${cfg.startDate || "Inicio año"} al ${cfg.endDate || "Fin año"}`
-    : `Año completo ${year}`;
+  const periodText = cfg.endDate
+    ? `${cfg.startDate || "Inicio año"} al ${cfg.endDate}`
+    : (cfg.startDate ? `Desde ${cfg.startDate} (Indefinido / Plaza fija)` : `Año completo ${year}`);
   const baseHoursText = `${cfg.baseHours || 1540} h anuales · Módulo DCI: ${cfg.hoursDCI || 7} h/día`;
 
   // Fila 1
@@ -2577,7 +2631,8 @@ function initApp() {
       const category = document.getElementById("reg-category").value.trim();
       const center = document.getElementById("reg-center").value.trim();
       const startDate = document.getElementById("reg-start-date").value;
-      const endDate = document.getElementById("reg-end-date").value;
+      const chkRegNoEnd = document.getElementById("reg-no-end-date");
+      const endDate = (chkRegNoEnd && chkRegNoEnd.checked) ? "" : document.getElementById("reg-end-date").value;
       const regime = document.getElementById("reg-regime").value;
 
       let baseHours = 1483;
@@ -2732,6 +2787,9 @@ function initApp() {
   if (btnLogout) {
     btnLogout.addEventListener("click", () => {
       showModal("Cerrar Sesión", "¿Deseas salir y cerrar tu sesión en este dispositivo?", async () => {
+        if (hasPendingCloudChanges) {
+          await flushCloudSave();
+        }
         localStorage.removeItem("sas_active_session");
         AppState.currentUser = null;
         if (auth) {
@@ -2780,7 +2838,8 @@ function initApp() {
       AppState.config.center = document.getElementById("edit-center").value.trim();
       AppState.config.service = document.getElementById("edit-service").value.trim();
       AppState.config.startDate = document.getElementById("edit-start-date").value;
-      AppState.config.endDate = document.getElementById("edit-end-date").value;
+      const chkEditNoEnd = document.getElementById("edit-no-end-date");
+      AppState.config.endDate = (chkEditNoEnd && chkEditNoEnd.checked) ? "" : document.getElementById("edit-end-date").value;
       AppState.config.regime = document.getElementById("edit-regime").value;
       AppState.config.baseHours = parseFloat(document.getElementById("edit-base-hours").value) || 1483;
 
@@ -2789,6 +2848,7 @@ function initApp() {
 
       syncConfigInputsFromState();
       updateAll();
+      triggerSave(true);
       editModal.classList.add("hidden");
       showToast("¡Parámetros del nombramiento actualizados con éxito!", "success");
     });
@@ -2797,6 +2857,9 @@ function initApp() {
   // Tabs de la aplicación
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       const target = btn.dataset.tab;
       AppState.activeTab = target;
 
@@ -2836,6 +2899,9 @@ function initApp() {
   const btnCalPrev = document.getElementById("cal-btn-prev");
   if (btnCalPrev) {
     btnCalPrev.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       clearActiveBrush();
       if (AppState.calendarMonth > 0) {
         AppState.calendarMonth--;
@@ -2851,6 +2917,9 @@ function initApp() {
   const btnCalNext = document.getElementById("cal-btn-next");
   if (btnCalNext) {
     btnCalNext.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       clearActiveBrush();
       if (AppState.calendarMonth < 11) {
         AppState.calendarMonth++;
@@ -2866,6 +2935,9 @@ function initApp() {
   const selCalMonth = document.getElementById("cal-select-month");
   if (selCalMonth) {
     selCalMonth.addEventListener("change", (e) => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       clearActiveBrush();
       AppState.calendarMonth = parseInt(e.target.value, 10);
       renderCalendar();
@@ -2881,6 +2953,9 @@ function initApp() {
   if (inputYear) {
     inputYear.value = AppState.calendarYear;
     const applyYearFromInput = () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       const val = parseInt(inputYear.value, 10);
       if (!isNaN(val) && val >= 1990 && val <= 2150) {
         if (AppState.calendarYear !== val) {
@@ -2905,6 +2980,9 @@ function initApp() {
 
   if (btnYearPrev) {
     btnYearPrev.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       clearActiveBrush();
       AppState.calendarYear--;
       syncYearDropdown();
@@ -2915,6 +2993,9 @@ function initApp() {
 
   if (btnYearNext) {
     btnYearNext.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       clearActiveBrush();
       AppState.calendarYear++;
       syncYearDropdown();
@@ -2926,6 +3007,9 @@ function initApp() {
   if (headerSelYear) {
     headerSelYear.value = String(AppState.calendarYear);
     headerSelYear.addEventListener("change", (e) => {
+      if (hasPendingCloudChanges) {
+        flushCloudSave();
+      }
       const selectedYear = parseInt(e.target.value, 10);
       if (selectedYear && !isNaN(selectedYear)) {
         clearActiveBrush();
@@ -3047,6 +3131,72 @@ function initApp() {
     const btn = document.querySelector(`.brush-btn[data-brush="${brushCode}"]`);
     if (btn) btn.click();
   }
+
+  // Control de plaza fija / nombramiento indefinido (sin fecha de fin)
+  const chkRegNoEnd = document.getElementById("reg-no-end-date");
+  const regEndDate = document.getElementById("reg-end-date");
+  if (chkRegNoEnd && regEndDate) {
+    chkRegNoEnd.addEventListener("change", (e) => {
+      regEndDate.disabled = e.target.checked;
+      regEndDate.required = !e.target.checked;
+      if (e.target.checked) {
+        regEndDate.dataset.previousValue = regEndDate.value;
+        regEndDate.value = "";
+      } else {
+        regEndDate.value = regEndDate.dataset.previousValue || `${AppState.calendarYear}-12-31`;
+      }
+    });
+  }
+
+  const chkEditNoEnd = document.getElementById("edit-no-end-date");
+  const editEndDate = document.getElementById("edit-end-date");
+  if (chkEditNoEnd && editEndDate) {
+    chkEditNoEnd.addEventListener("change", (e) => {
+      editEndDate.disabled = e.target.checked;
+      editEndDate.required = !e.target.checked;
+      if (e.target.checked) {
+        editEndDate.dataset.previousValue = editEndDate.value;
+        editEndDate.value = "";
+      } else {
+        editEndDate.value = editEndDate.dataset.previousValue || `${AppState.calendarYear}-12-31`;
+      }
+    });
+  }
+
+  // Interacción con el indicador de nube para guardar bajo demanda
+  const cloudStatusEl = document.getElementById("cloud-status-text");
+  if (cloudStatusEl) {
+    cloudStatusEl.addEventListener("click", () => {
+      if (hasPendingCloudChanges) {
+        showToast("Sincronizando cambios pendientes con la nube...", "info");
+        flushCloudSave();
+      } else {
+        showToast("Los datos ya están sincronizados en la nube SAS", "info");
+      }
+    });
+  }
+
+  // Salvaguarda ante cierre de ventana / pestaña o salida de la aplicación
+  window.addEventListener("beforeunload", (e) => {
+    if (hasPendingCloudChanges) {
+      flushCloudSave();
+      e.preventDefault();
+      e.returnValue = "Hay cambios pendientes de sincronizar en la nube.";
+      return e.returnValue;
+    }
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && hasPendingCloudChanges) {
+      flushCloudSave();
+    }
+  });
+
+  window.addEventListener("pagehide", () => {
+    if (hasPendingCloudChanges) {
+      flushCloudSave();
+    }
+  });
 
   // Asegurar que al inicio no haya ningún pincel preseleccionado
   clearActiveBrush();
