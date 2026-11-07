@@ -1737,6 +1737,9 @@ export function syncEditModalInputsFromState() {
     editEnd.disabled = isNoEnd;
     editEnd.required = !isNoEnd;
     editEnd.value = isNoEnd ? "" : AppState.config.endDate;
+    if (AppState.config.startDate) {
+      editEnd.min = AppState.config.startDate;
+    }
   } else {
     setVal("edit-end-date", AppState.config.endDate);
   }
@@ -2670,8 +2673,24 @@ function initApp() {
       const center = document.getElementById("reg-center").value.trim();
       const startDate = document.getElementById("reg-start-date").value;
       const chkRegNoEnd = document.getElementById("reg-no-end-date");
-      const endDate = (chkRegNoEnd && chkRegNoEnd.checked) ? "" : document.getElementById("reg-end-date").value;
+      const hasNoEnd = chkRegNoEnd && chkRegNoEnd.checked;
+      const endDate = hasNoEnd ? "" : document.getElementById("reg-end-date").value;
       const regime = document.getElementById("reg-regime").value;
+
+      if (!startDate) {
+        showAuthError("Por favor, introduce la fecha de inicio del nombramiento.");
+        return;
+      }
+
+      if (!hasNoEnd && !endDate) {
+        showAuthError("Por favor, introduce la fecha fin de contrato o marca la opción de plaza fija.");
+        return;
+      }
+
+      if (!hasNoEnd && endDate && startDate && endDate <= startDate) {
+        showAuthError("La fecha fin de nombramiento debe ser posterior a la fecha de contratación.");
+        return;
+      }
 
       let baseHours = 1483;
       if (regime === "diurno") baseHours = 1540;
@@ -2870,14 +2889,34 @@ function initApp() {
   if (formEditParams) {
     formEditParams.addEventListener("submit", (e) => {
       e.preventDefault();
+
+      const startDate = document.getElementById("edit-start-date").value;
+      const chkEditNoEnd = document.getElementById("edit-no-end-date");
+      const hasNoEnd = chkEditNoEnd && chkEditNoEnd.checked;
+      const endDate = hasNoEnd ? "" : document.getElementById("edit-end-date").value;
+
+      if (!startDate) {
+        showToast("Por favor, introduce la fecha de inicio del nombramiento.", "error");
+        return;
+      }
+
+      if (!hasNoEnd && !endDate) {
+        showToast("Por favor, introduce la fecha fin de contrato o marca la opción de plaza fija.", "error");
+        return;
+      }
+
+      if (!hasNoEnd && endDate && startDate && endDate <= startDate) {
+        showToast("La fecha fin de nombramiento debe ser posterior a la fecha de contratación.", "error");
+        return;
+      }
+
       AppState.config.workerName = document.getElementById("edit-worker-name").value.trim();
       AppState.config.dni = document.getElementById("edit-worker-dni").value.trim();
       AppState.config.category = document.getElementById("edit-category").value.trim();
       AppState.config.center = document.getElementById("edit-center").value.trim();
       AppState.config.service = document.getElementById("edit-service").value.trim();
-      AppState.config.startDate = document.getElementById("edit-start-date").value;
-      const chkEditNoEnd = document.getElementById("edit-no-end-date");
-      AppState.config.endDate = (chkEditNoEnd && chkEditNoEnd.checked) ? "" : document.getElementById("edit-end-date").value;
+      AppState.config.startDate = startDate;
+      AppState.config.endDate = endDate;
       AppState.config.regime = document.getElementById("edit-regime").value;
       AppState.config.baseHours = parseFloat(document.getElementById("edit-base-hours").value) || 1483;
 
@@ -3176,33 +3215,92 @@ function initApp() {
     if (btn) btn.click();
   }
 
-  // Control de plaza fija / nombramiento indefinido (sin fecha de fin)
+  // Control de plaza fija / nombramiento indefinido (sin fecha de fin) y validación de fechas coherentes
   const chkRegNoEnd = document.getElementById("reg-no-end-date");
   const regEndDate = document.getElementById("reg-end-date");
+  const regStartDate = document.getElementById("reg-start-date");
+
+  if (regStartDate && regEndDate) {
+    if (regStartDate.value) {
+      regEndDate.min = regStartDate.value;
+    }
+    regStartDate.addEventListener("change", () => {
+      if (regStartDate.value) {
+        regEndDate.min = regStartDate.value;
+        if (regEndDate.value && regEndDate.value <= regStartDate.value) {
+          regEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+        } else {
+          regEndDate.setCustomValidity("");
+        }
+      }
+    });
+    regEndDate.addEventListener("change", () => {
+      if (regStartDate.value && regEndDate.value && regEndDate.value <= regStartDate.value) {
+        regEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+      } else {
+        regEndDate.setCustomValidity("");
+      }
+    });
+  }
+
   if (chkRegNoEnd && regEndDate) {
     chkRegNoEnd.addEventListener("change", (e) => {
       regEndDate.disabled = e.target.checked;
       regEndDate.required = !e.target.checked;
       if (e.target.checked) {
+        regEndDate.setCustomValidity("");
         regEndDate.dataset.previousValue = regEndDate.value;
         regEndDate.value = "";
       } else {
         regEndDate.value = regEndDate.dataset.previousValue || `${AppState.calendarYear}-12-31`;
+        if (regStartDate && regStartDate.value && regEndDate.value <= regStartDate.value) {
+          regEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+        } else {
+          regEndDate.setCustomValidity("");
+        }
       }
     });
   }
 
   const chkEditNoEnd = document.getElementById("edit-no-end-date");
   const editEndDate = document.getElementById("edit-end-date");
+  const editStartDate = document.getElementById("edit-start-date");
+
+  if (editStartDate && editEndDate) {
+    editStartDate.addEventListener("change", () => {
+      if (editStartDate.value) {
+        editEndDate.min = editStartDate.value;
+        if (editEndDate.value && editEndDate.value <= editStartDate.value) {
+          editEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+        } else {
+          editEndDate.setCustomValidity("");
+        }
+      }
+    });
+    editEndDate.addEventListener("change", () => {
+      if (editStartDate.value && editEndDate.value && editEndDate.value <= editStartDate.value) {
+        editEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+      } else {
+        editEndDate.setCustomValidity("");
+      }
+    });
+  }
+
   if (chkEditNoEnd && editEndDate) {
     chkEditNoEnd.addEventListener("change", (e) => {
       editEndDate.disabled = e.target.checked;
       editEndDate.required = !e.target.checked;
       if (e.target.checked) {
+        editEndDate.setCustomValidity("");
         editEndDate.dataset.previousValue = editEndDate.value;
         editEndDate.value = "";
       } else {
         editEndDate.value = editEndDate.dataset.previousValue || `${AppState.calendarYear}-12-31`;
+        if (editStartDate && editStartDate.value && editEndDate.value <= editStartDate.value) {
+          editEndDate.setCustomValidity("La fecha de fin debe ser posterior a la fecha de inicio.");
+        } else {
+          editEndDate.setCustomValidity("");
+        }
       }
     });
   }
