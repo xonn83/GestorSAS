@@ -103,10 +103,17 @@ export const AppState = {
     moscosos: 0,
     dciHoras: 0,
     guardias: 0,
+    horasEspeciales: 0,
     isManual: false
   })),
   activeTab: "calendar",
-  simulatedDciDays: 0
+  simulatedDciDays: 0,
+  customShift: {
+    start: "08:00",
+    end: "15:00",
+    hours: 7.0
+  },
+  targetCustomShiftDate: null
 };
 
 const MONTH_NAMES = [
@@ -118,7 +125,10 @@ const SHIFT_TYPES = {
   M: { label: "Mañana", code: "M", hours: 7.0, bg: "bg-amber-100", text: "text-amber-900", border: "border-amber-300" },
   T: { label: "Tarde", code: "T", hours: 7.0, bg: "bg-orange-100", text: "text-orange-900", border: "border-orange-300" },
   N: { label: "Noche", code: "N", hours: 10.0, bg: "bg-indigo-100", text: "text-indigo-900", border: "border-indigo-300" },
+  MT: { label: "Mañana + Tarde", code: "MT", hours: 14.0, bg: "bg-amber-100", text: "text-amber-950", border: "border-amber-400" },
   MN: { label: "Mañana + Noche", code: "MN", hours: 17.0, bg: "bg-fuchsia-100", text: "text-fuchsia-950", border: "border-fuchsia-300" },
+  TN: { label: "Tarde + Noche", code: "TN", hours: 17.0, bg: "bg-violet-100", text: "text-violet-950", border: "border-violet-400" },
+  P: { label: "Personalizado", code: "P", hours: 0.0, bg: "bg-teal-100", text: "text-teal-950", border: "border-teal-400" },
   S: { label: "Saliente / Libre", code: "S", hours: 0.0, bg: "bg-slate-200", text: "text-slate-800", border: "border-slate-300" },
   V: { label: "Vacaciones", code: "V", hours: 7.0, bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300" },
   LD: { label: "Día LD", code: "LD", hours: 7.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
@@ -139,9 +149,21 @@ const BRUSH_CONFIG = {
     inactiveClasses: ["bg-indigo-50", "text-indigo-800", "border-indigo-200", "hover:bg-indigo-100"],
     activeClasses: ["bg-indigo-200", "text-indigo-950", "border-indigo-500", "ring-2", "ring-indigo-500", "font-black", "shadow-xs"]
   },
+  MT: {
+    inactiveClasses: ["bg-amber-50", "text-amber-900", "border-amber-200", "hover:bg-amber-100"],
+    activeClasses: ["bg-amber-200", "text-amber-950", "border-amber-500", "ring-2", "ring-amber-500", "font-black", "shadow-xs"]
+  },
   MN: {
     inactiveClasses: ["bg-fuchsia-50", "text-fuchsia-900", "border-fuchsia-200", "hover:bg-fuchsia-100"],
     activeClasses: ["bg-fuchsia-200", "text-fuchsia-950", "border-fuchsia-500", "ring-2", "ring-fuchsia-500", "font-black", "shadow-xs"]
+  },
+  TN: {
+    inactiveClasses: ["bg-violet-50", "text-violet-900", "border-violet-200", "hover:bg-violet-100"],
+    activeClasses: ["bg-violet-200", "text-violet-950", "border-violet-500", "ring-2", "ring-violet-500", "font-black", "shadow-xs"]
+  },
+  P: {
+    inactiveClasses: ["bg-teal-50", "text-teal-900", "border-teal-200", "hover:bg-teal-100"],
+    activeClasses: ["bg-teal-200", "text-teal-950", "border-teal-500", "ring-2", "ring-teal-500", "font-black", "shadow-xs"]
   },
   V: {
     inactiveClasses: ["bg-emerald-50", "text-emerald-800", "border-emerald-200", "hover:bg-emerald-100"],
@@ -171,6 +193,11 @@ export function clearActiveBrush() {
       btn.classList.add(...cfg.inactiveClasses);
     }
   });
+
+  const btnDoblajes = document.getElementById("btn-doblajes-menu");
+  if (btnDoblajes) {
+    btnDoblajes.className = "px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-fuchsia-50 text-fuchsia-900 border-fuchsia-200 hover:bg-fuchsia-100 flex items-center gap-1 shadow-2xs";
+  }
 }
 
 export function setActiveBrush(brushCode) {
@@ -182,11 +209,111 @@ export function setActiveBrush(brushCode) {
     btn.classList.remove(...cfg.inactiveClasses);
     btn.classList.add(...cfg.activeClasses);
   }
+
+  // Si el pincel activo es un doblaje, destacar el botón principal del desplegable
+  const btnDoblajes = document.getElementById("btn-doblajes-menu");
+  if (btnDoblajes && ["MT", "MN", "TN"].includes(brushCode)) {
+    btnDoblajes.className = "px-2.5 py-1.5 rounded-lg font-black border transition-all cursor-pointer bg-fuchsia-200 text-fuchsia-950 border-fuchsia-500 ring-2 ring-fuchsia-500 flex items-center gap-1 shadow-xs";
+    const labelEl = document.getElementById("label-doblaje-selected");
+    if (labelEl) {
+      if (brushCode === "MT") labelEl.textContent = "[MT] M+T (14h) ▼";
+      else if (brushCode === "MN") labelEl.textContent = "[MN] M+N (17h) ▼";
+      else if (brushCode === "TN") labelEl.textContent = "[TN] T+N (17h) ▼";
+    }
+  }
+}
+
+export function calculateShiftHours(startTime, endTime) {
+  const [startH, startM] = (startTime || "08:00").split(":").map(Number);
+  const [endH, endM] = (endTime || "15:00").split(":").map(Number);
+
+  const startTotalMinutes = startH * 60 + startM;
+  const endTotalMinutes = endH * 60 + endM;
+
+  let diffMinutes = endTotalMinutes - startTotalMinutes;
+  if (diffMinutes <= 0) {
+    diffMinutes += 24 * 60; // Cruza la medianoche (ej. 22:00 a 06:00 = 8h, 18:00 a 02:00 = 8h)
+  }
+
+  const hours = diffMinutes / 60;
+  return parseFloat(hours.toFixed(1));
+}
+
+export function isCrossingMidnight(startTime, endTime) {
+  const [startH, startM] = (startTime || "08:00").split(":").map(Number);
+  const [endH, endM] = (endTime || "15:00").split(":").map(Number);
+  const startTotal = startH * 60 + startM;
+  const endTotal = endH * 60 + endM;
+  return endTotal <= startTotal;
+}
+
+export function stepTime(timeStr, deltaMinutes) {
+  let [h, m] = (timeStr || "00:00").split(":").map(Number);
+  let total = h * 60 + m + deltaMinutes;
+  total = ((total % 1440) + 1440) % 1440;
+  const newH = String(Math.floor(total / 60)).padStart(2, "0");
+  const newM = String(total % 60).padStart(2, "0");
+  return `${newH}:${newM}`;
+}
+
+export function openCustomShiftModal(start = null, end = null, targetDateStr = null) {
+  const modal = document.getElementById("custom-shift-modal");
+  if (!modal) return;
+
+  const curStart = start || AppState.customShift.start || "08:00";
+  const curEnd = end || AppState.customShift.end || "15:00";
+
+  AppState.customShift.start = curStart;
+  AppState.customShift.end = curEnd;
+  AppState.customShift.hours = calculateShiftHours(curStart, curEnd);
+  AppState.targetCustomShiftDate = targetDateStr || null;
+
+  const titleEl = document.getElementById("custom-shift-modal-title");
+  const confirmBtnText = document.getElementById("btn-confirm-custom-text");
+
+  if (targetDateStr) {
+    const d = parseISODate(targetDateStr);
+    if (titleEl) titleEl.textContent = `Turno del ${d.getDate()} de ${MONTH_NAMES[d.getMonth()]}`;
+    if (confirmBtnText) confirmBtnText.textContent = "Guardar en este día";
+  } else {
+    if (titleEl) titleEl.textContent = "Turno Personalizado";
+    if (confirmBtnText) confirmBtnText.textContent = "Activar Pincel [P]";
+  }
+
+  updateCustomShiftModalDisplay();
+  modal.classList.remove("hidden");
+}
+
+export function updateCustomShiftModalDisplay() {
+  const startEl = document.getElementById("display-custom-start-time");
+  const endEl = document.getElementById("display-custom-end-time");
+  const totalEl = document.getElementById("custom-shift-total-hours");
+  const midnightBadge = document.getElementById("custom-shift-midnight-badge");
+
+  if (startEl) startEl.textContent = AppState.customShift.start;
+  if (endEl) endEl.textContent = AppState.customShift.end;
+
+  const hours = calculateShiftHours(AppState.customShift.start, AppState.customShift.end);
+  AppState.customShift.hours = hours;
+
+  if (totalEl) totalEl.textContent = `+${hours.toFixed(1)} h`;
+
+  const isCross = isCrossingMidnight(AppState.customShift.start, AppState.customShift.end);
+  if (midnightBadge) {
+    if (isCross) midnightBadge.classList.remove("hidden");
+    else midnightBadge.classList.add("hidden");
+  }
 }
 
 export function getShiftDescription(code) {
   if (!code) return "Sin turno";
   if (code === "CLEAR") return "Borrar turno";
+  if (typeof code === "string" && code.startsWith("P")) {
+    const parts = code.split(":");
+    const h = parts[1] || "7.0";
+    const range = parts[2] ? parts[2].replace("-", " a ") : "";
+    return `[P] Personalizado ${range ? `(${range})` : ''} (+${h}h)`;
+  }
   const st = SHIFT_TYPES[code];
   if (!st) return code;
   let hoursText = "";
@@ -197,6 +324,14 @@ export function getShiftDescription(code) {
     const hM = parseFloat(AppState.config.hoursM) || 7.0;
     const hN = parseFloat(AppState.config.hoursN) || 10.0;
     hoursText = ` (+${(hM + hN).toFixed(0)}h)`;
+  } else if (st.code === "MT") {
+    const hM = parseFloat(AppState.config.hoursM) || 7.0;
+    const hT = parseFloat(AppState.config.hoursT) || 7.0;
+    hoursText = ` (+${(hM + hT).toFixed(0)}h)`;
+  } else if (st.code === "TN") {
+    const hT = parseFloat(AppState.config.hoursT) || 7.0;
+    const hN = parseFloat(AppState.config.hoursN) || 10.0;
+    hoursText = ` (+${(hT + hN).toFixed(0)}h)`;
   } else if (st.code === "DCI") {
     const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
     hoursText = ` (-${hDCI.toFixed(0)}h)`;
@@ -345,6 +480,7 @@ export function syncCalendarMonthToTable(month) {
 
   const daysInMonth = getDaysInMonth(year, month);
   let mCount = 0, tCount = 0, nCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let customH = 0;
 
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = formatISODate(year, month, day);
@@ -355,10 +491,18 @@ export function syncCalendarMonthToTable(month) {
     else if (shift === "T") tCount++;
     else if (shift === "N") nCount++;
     else if (shift === "MN") { mCount++; nCount++; }
+    else if (shift === "MT") { mCount++; tCount++; }
+    else if (shift === "TN") { tCount++; nCount++; }
     else if (shift === "V") vCount++;
     else if (shift === "LD") ldCount++;
     else if (shift === "DCI") dciCount++;
     else if (shift === "G") gCount += 17;
+    else if (typeof shift === "string" && shift.startsWith("P")) {
+      const parts = shift.split(":");
+      customH += parseFloat(parts[1]) || 0;
+    } else if (typeof shift === "object" && shift?.code === "P") {
+      customH += parseFloat(shift.hours) || 0;
+    }
   }
 
   row.mananas = mCount;
@@ -368,6 +512,7 @@ export function syncCalendarMonthToTable(month) {
   row.moscosos = ldCount;
   row.dciHoras = dciCount * (parseFloat(AppState.config.hoursDCI) || 7.0);
   row.guardias = gCount;
+  row.horasEspeciales = parseFloat(customH.toFixed(1));
   row.isManual = false;
 }
 
@@ -489,13 +634,17 @@ export function ensureTwoWaySync() {
       else if (shift === "T") tCount++;
       else if (shift === "N") nCount++;
       else if (shift === "MN") { mCount++; nCount++; }
+      else if (shift === "MT") { mCount++; tCount++; }
+      else if (shift === "TN") { tCount++; nCount++; }
       else if (shift === "V") vCount++;
       else if (shift === "LD") ldCount++;
       else if (shift === "DCI") dciCount++;
+      else if (typeof shift === "string" && shift.startsWith("P")) { mCount++; }
     }
 
     const tableTotal = (row.mananas || 0) + (row.tardes || 0) + (row.noches || 0) + 
-                       (row.vacaciones || 0) + (row.moscosos || 0) + Math.round((row.dciHoras || 0) / 7);
+                       (row.vacaciones || 0) + (row.moscosos || 0) + Math.round((row.dciHoras || 0) / 7) +
+                       ((row.horasEspeciales || 0) > 0 ? 1 : 0);
     const calTotal = mCount + tCount + nCount + vCount + ldCount + dciCount;
 
     // Si la tabla tiene datos pero el calendario está vacío o incompleto
@@ -524,7 +673,8 @@ export function getMonthActualHours(month) {
                     (row.tardes * hT) +
                     (row.noches * hN) +
                     (row.vacaciones * hV) +
-                    (row.moscosos * hLD) -
+                    (row.moscosos * hLD) +
+                    (row.horasEspeciales || 0) -
                     (row.dciHoras);
   
   return parseFloat(effective.toFixed(1));
@@ -789,7 +939,7 @@ export function getAccumulatedMetrics() {
     const ldCount = row.moscosos || 0;
     const dciH = row.dciHoras || 0;
 
-    const presHours = (mCount * hM) + (tCount * hT) + (nCount * hN);
+    const presHours = (mCount * hM) + (tCount * hT) + (nCount * hN) + (row.horasEspeciales || 0);
     const permHours = (vCount * hV) + (ldCount * hLD);
     const effHours = presHours + permHours - dciH;
 
@@ -802,7 +952,7 @@ export function getAccumulatedMetrics() {
 
     const hasShifts = (
       mCount > 0 || tCount > 0 || nCount > 0 ||
-      vCount > 0 || ldCount > 0 || dciH !== 0
+      vCount > 0 || ldCount > 0 || dciH !== 0 || ((row.horasEspeciales || 0) > 0)
     );
 
     if (actDays > 0 && hasShifts) {
@@ -999,18 +1149,38 @@ function renderCalendar() {
     grid.appendChild(cell);
   }
 
-  let mCount = 0, tCount = 0, nCount = 0, mnCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let mCount = 0, tCount = 0, nCount = 0, mnCount = 0, mtCount = 0, tnCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let customHoursMonth = 0;
 
   for (let day = 1; day <= daysInCurrentMonth; day++) {
     const dateStr = formatISODate(year, month, day);
     const inContract = isDateInsideContract(dateStr);
-    const shiftCode = inContract ? AppState.calendarShifts[dateStr] : null;
+    const rawShift = inContract ? AppState.calendarShifts[dateStr] : null;
+
+    let shiftCode = rawShift;
+    let customData = null;
+
+    if (rawShift) {
+      if (typeof rawShift === "string" && rawShift.startsWith("P")) {
+        shiftCode = "P";
+        const parts = rawShift.split(":");
+        const h = parseFloat(parts[1]) || 0;
+        const range = parts[2] || "";
+        customData = { hours: h, range: range };
+      } else if (typeof rawShift === "object" && rawShift?.code === "P") {
+        shiftCode = "P";
+        customData = { hours: parseFloat(rawShift.hours) || 0, range: `${rawShift.start || ''}-${rawShift.end || ''}` };
+      }
+    }
 
     if (shiftCode) {
       if (shiftCode === "M") mCount++;
       else if (shiftCode === "T") tCount++;
       else if (shiftCode === "N") nCount++;
       else if (shiftCode === "MN") { mnCount++; mCount++; nCount++; }
+      else if (shiftCode === "MT") { mtCount++; mCount++; tCount++; }
+      else if (shiftCode === "TN") { tnCount++; tCount++; nCount++; }
+      else if (shiftCode === "P" && customData) { customHoursMonth += customData.hours; }
       else if (shiftCode === "V") vCount++;
       else if (shiftCode === "LD") ldCount++;
       else if (shiftCode === "DCI") dciCount++;
@@ -1048,6 +1218,16 @@ function renderCalendar() {
         const hM = parseFloat(AppState.config.hoursM) || 7.0;
         const hN = parseFloat(AppState.config.hoursN) || 10.0;
         hoursLabel = `+${(hM + hN).toFixed(0)}h`;
+      } else if (st.code === "MT") {
+        const hM = parseFloat(AppState.config.hoursM) || 7.0;
+        const hT = parseFloat(AppState.config.hoursT) || 7.0;
+        hoursLabel = `+${(hM + hT).toFixed(0)}h`;
+      } else if (st.code === "TN") {
+        const hT = parseFloat(AppState.config.hoursT) || 7.0;
+        const hN = parseFloat(AppState.config.hoursN) || 10.0;
+        hoursLabel = `+${(hT + hN).toFixed(0)}h`;
+      } else if (st.code === "P" && customData) {
+        hoursLabel = `+${customData.hours}h`;
       } else if (st.code === "DCI") {
         const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
         hoursLabel = `-${hDCI}h`;
@@ -1055,8 +1235,12 @@ function renderCalendar() {
         hoursLabel = "Guardia";
       }
 
+      const shiftTitle = (st.code === "P" && customData && customData.range)
+        ? `Turno Personalizado: ${customData.range.replace('-', ' a ')} (+${customData.hours}h)`
+        : st.label;
+
       shiftHtml = `
-        <div class="mt-0.5 sm:mt-1 py-0.5 sm:py-1 px-1 rounded sm:rounded-md ${st.bg} ${st.text} border ${st.border} flex items-center justify-center sm:justify-between shadow-2xs text-center">
+        <div class="mt-0.5 sm:mt-1 py-0.5 sm:py-1 px-1 rounded sm:rounded-md ${st.bg} ${st.text} border ${st.border} flex items-center justify-center sm:justify-between shadow-2xs text-center" title="${shiftTitle}">
           <span class="font-black text-[11px] sm:text-xs tracking-tight">${st.code}</span>
           <span class="text-[10px] font-mono font-bold hidden sm:inline ml-1">${hoursLabel}</span>
         </div>
@@ -1119,16 +1303,22 @@ function renderCalendar() {
 function applyBrushToDate(dateStr) {
   if (!isDateInsideContract(dateStr)) return;
 
-  // 1. Si no hay ningún turno seleccionado, evitar cualquier modificación por descuido y avisar al usuario
-  if (!AppState.activeBrush) {
-    showToast("Selecciona primero un turno o la opción Borrar en la botonera superior", "info");
-    return;
-  }
-
   const d = parseISODate(dateStr);
   const dayOfWeek = d.getDay(); // 0 = Domingo, 6 = Sábado
   const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
   const currentShift = AppState.calendarShifts[dateStr];
+
+  // 1. Si no hay ningún turno seleccionado, verificar si se ha pulsado en un turno personalizado existente para editarlo
+  if (!AppState.activeBrush) {
+    if (typeof currentShift === "string" && currentShift.startsWith("P")) {
+      const parts = currentShift.split(":");
+      const range = parts[2] ? parts[2].split("-") : ["08:00", "15:00"];
+      openCustomShiftModal(range[0], range[1], dateStr);
+      return;
+    }
+    showToast("Selecciona primero un turno o la opción Borrar en la botonera superior", "info");
+    return;
+  }
 
   // 2. Validación: En régimen diurno (L-V), no se pueden asignar vacaciones ni permisos en días no laborables
   if (AppState.config.regime === "diurno" && isWeekend) {
@@ -1175,24 +1365,28 @@ function applyBrushToDate(dateStr) {
     return;
   }
 
+  const newShiftValue = (AppState.activeBrush === "P")
+    ? `P:${AppState.customShift.hours}:${AppState.customShift.start}-${AppState.customShift.end}`
+    : AppState.activeBrush;
+
   // 4. Caso: Mismo turno ya registrado en esa fecha
-  if (currentShift === AppState.activeBrush) {
+  if (currentShift === newShiftValue) {
     return;
   }
 
   // 5. Caso: Sobreescribir una casilla que ya tiene OTRO turno previamente grabado
-  if (currentShift && currentShift !== AppState.activeBrush) {
+  if (currentShift && currentShift !== newShiftValue) {
     const oldDesc = getShiftDescription(currentShift);
-    const newDesc = getShiftDescription(AppState.activeBrush);
+    const newDesc = getShiftDescription(newShiftValue);
 
     showModal(
       "¿Cambiar turno del día?",
       `El día <strong>${dateFormatted}</strong> ya tiene asignado un turno de <strong>${oldDesc}</strong>.<br><br>¿Deseas sustituirlo por el turno de <strong>${newDesc}</strong>?`,
       () => {
-        AppState.calendarShifts[dateStr] = AppState.activeBrush;
+        AppState.calendarShifts[dateStr] = newShiftValue;
         syncCalendarMonthToTable(d.getMonth());
         updateAll();
-        showToast(`Turno del ${dateFormatted} actualizado a [${AppState.activeBrush}]`, "success");
+        showToast(`Turno del ${dateFormatted} actualizado a ${newDesc}`, "success");
       },
       {
         confirmText: "Cambiar turno",
@@ -1205,7 +1399,7 @@ function applyBrushToDate(dateStr) {
   }
 
   // 6. Caso: Casilla vacía -> asignar directamente sin popup
-  AppState.calendarShifts[dateStr] = AppState.activeBrush;
+  AppState.calendarShifts[dateStr] = newShiftValue;
   syncCalendarMonthToTable(d.getMonth());
   updateAll();
 }
@@ -1359,7 +1553,8 @@ function updateTableComputedCells() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0)
+      ((row.dciHoras || 0) !== 0) ||
+      ((row.horasEspeciales || 0) > 0)
     );
 
     const tr = document.getElementById(`gerhonte-row-${m}`);
@@ -1389,7 +1584,7 @@ function updateTableComputedCells() {
       return;
     }
 
-    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
     const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
     const dciH = row.dciHoras || 0;
     const actHours = presHours + permHours - dciH;
@@ -2046,7 +2241,8 @@ export function exportarPDF() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0)
+      ((row.dciHoras || 0) !== 0) ||
+      ((row.horasEspeciales || 0) > 0)
     );
 
     if (!hasShifts) {
@@ -2063,7 +2259,7 @@ export function exportarPDF() {
       ];
     }
 
-    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+    const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
     const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
     const dciH = row.dciHoras || 0;
     const actHours = presHours + permHours - dciH;
@@ -2237,7 +2433,8 @@ export function exportarCSV() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0)
+      ((row.dciHoras || 0) !== 0) ||
+      ((row.horasEspeciales || 0) > 0)
     );
 
     if (activeDays === 0) {
@@ -2245,7 +2442,7 @@ export function exportarCSV() {
     } else if (!hasShifts) {
       csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;Pendiente de rellenar\r\n`;
     } else {
-      const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN);
+      const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
       const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
       const dciH = row.dciHoras || 0;
       const actHours = presHours + permHours - dciH;
@@ -2968,6 +3165,10 @@ function initApp() {
   document.querySelectorAll(".brush-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const brush = btn.dataset.brush;
+      if (brush === "P") {
+        openCustomShiftModal();
+        return;
+      }
       if (AppState.activeBrush === brush) {
         clearActiveBrush();
         showToast("Pincel deseleccionado", "info");
@@ -3192,14 +3393,17 @@ function initApp() {
   const btnPrintTab = document.getElementById("btn-print-table");
   if (btnPrintTab) btnPrintTab.addEventListener("click", () => window.print());
 
-  // Atajos de teclado para turnos (M, T, N, 2/B, V, L, D, X, Esc)
+  // Atajos de teclado para turnos (M, T, N, 1:MT, 2:MN, 3:TN, P:Personalizado, V, L, D, X, Esc)
   window.addEventListener("keydown", (e) => {
     if (["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
     const key = e.key.toUpperCase();
     if (key === "M") selectBrush("M");
     else if (key === "T") selectBrush("T");
     else if (key === "N") selectBrush("N");
+    else if (key === "1") selectBrush("MT");
     else if (key === "2" || key === "B") selectBrush("MN");
+    else if (key === "3") selectBrush("TN");
+    else if (key === "P") openCustomShiftModal();
     else if (key === "V") selectBrush("V");
     else if (key === "L") selectBrush("LD");
     else if (key === "D") selectBrush("DCI");
@@ -3214,6 +3418,91 @@ function initApp() {
     const btn = document.querySelector(`.brush-btn[data-brush="${brushCode}"]`);
     if (btn) btn.click();
   }
+
+  // Desplegable de Doblajes
+  const btnDoblajesMenu = document.getElementById("btn-doblajes-menu");
+  const doblajesMenu = document.getElementById("doblajes-menu");
+
+  if (btnDoblajesMenu && doblajesMenu) {
+    btnDoblajesMenu.addEventListener("click", (e) => {
+      e.stopPropagation();
+      doblajesMenu.classList.toggle("hidden");
+    });
+
+    document.querySelectorAll(".doblaje-option").forEach(opt => {
+      opt.addEventListener("click", () => {
+        const brush = opt.dataset.brush;
+        setActiveBrush(brush);
+        doblajesMenu.classList.add("hidden");
+      });
+    });
+
+    window.addEventListener("click", (e) => {
+      if (!btnDoblajesMenu.contains(e.target) && !doblajesMenu.contains(e.target)) {
+        doblajesMenu.classList.add("hidden");
+      }
+    });
+  }
+
+  // Modal Turno Personalizado [P]
+  const btnDecStart = document.getElementById("btn-dec-start-time");
+  const btnIncStart = document.getElementById("btn-inc-start-time");
+  const btnDecEnd = document.getElementById("btn-dec-end-time");
+  const btnIncEnd = document.getElementById("btn-inc-end-time");
+
+  if (btnDecStart) btnDecStart.addEventListener("click", () => {
+    AppState.customShift.start = stepTime(AppState.customShift.start, -30);
+    updateCustomShiftModalDisplay();
+  });
+  if (btnIncStart) btnIncStart.addEventListener("click", () => {
+    AppState.customShift.start = stepTime(AppState.customShift.start, 30);
+    updateCustomShiftModalDisplay();
+  });
+  if (btnDecEnd) btnDecEnd.addEventListener("click", () => {
+    AppState.customShift.end = stepTime(AppState.customShift.end, -30);
+    updateCustomShiftModalDisplay();
+  });
+  if (btnIncEnd) btnIncEnd.addEventListener("click", () => {
+    AppState.customShift.end = stepTime(AppState.customShift.end, 30);
+    updateCustomShiftModalDisplay();
+  });
+
+  const btnConfirmCustom = document.getElementById("btn-confirm-custom-shift");
+  if (btnConfirmCustom) {
+    btnConfirmCustom.addEventListener("click", () => {
+      const modal = document.getElementById("custom-shift-modal");
+      const hours = calculateShiftHours(AppState.customShift.start, AppState.customShift.end);
+      AppState.customShift.hours = hours;
+
+      if (AppState.targetCustomShiftDate) {
+        const dateStr = AppState.targetCustomShiftDate;
+        AppState.calendarShifts[dateStr] = `P:${hours}:${AppState.customShift.start}-${AppState.customShift.end}`;
+        const d = parseISODate(dateStr);
+        syncCalendarMonthToTable(d.getMonth());
+        updateAll();
+        if (modal) modal.classList.add("hidden");
+        showToast(`Turno personalizado (+${hours}h) guardado en el día seleccionado`, "success");
+        AppState.targetCustomShiftDate = null;
+      } else {
+        setActiveBrush("P");
+        const labelP = document.getElementById("label-brush-p");
+        if (labelP) labelP.textContent = `[P] (${hours}h)`;
+        if (modal) modal.classList.add("hidden");
+        showToast(`Pincel [P] Personalizado activado (${AppState.customShift.start} a ${AppState.customShift.end}, +${hours}h)`, "info");
+      }
+    });
+  }
+
+  const btnCloseCustom = document.getElementById("btn-close-custom-shift");
+  const btnCancelCustom = document.getElementById("btn-cancel-custom-shift");
+  if (btnCloseCustom) btnCloseCustom.addEventListener("click", () => {
+    document.getElementById("custom-shift-modal")?.classList.add("hidden");
+    AppState.targetCustomShiftDate = null;
+  });
+  if (btnCancelCustom) btnCancelCustom.addEventListener("click", () => {
+    document.getElementById("custom-shift-modal")?.classList.add("hidden");
+    AppState.targetCustomShiftDate = null;
+  });
 
   // Control de plaza fija / nombramiento indefinido (sin fecha de fin) y validación de fechas coherentes
   const chkRegNoEnd = document.getElementById("reg-no-end-date");
