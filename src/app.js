@@ -198,6 +198,15 @@ export function clearActiveBrush() {
   if (btnDoblajes) {
     btnDoblajes.className = "px-2.5 py-1.5 rounded-lg font-bold border transition-all cursor-pointer bg-fuchsia-50 text-fuchsia-900 border-fuchsia-200 hover:bg-fuchsia-100 flex items-center gap-1 shadow-2xs";
   }
+  const labelDoblaje = document.getElementById("label-doblaje-selected");
+  if (labelDoblaje) {
+    labelDoblaje.textContent = "Doblajes ▼";
+  }
+
+  const labelP = document.getElementById("label-brush-p");
+  if (labelP) {
+    labelP.textContent = "[P] Personaliz.";
+  }
 }
 
 export function setActiveBrush(brushCode) {
@@ -219,6 +228,14 @@ export function setActiveBrush(brushCode) {
       if (brushCode === "MT") labelEl.textContent = "[MT] M+T (14h) ▼";
       else if (brushCode === "MN") labelEl.textContent = "[MN] M+N (17h) ▼";
       else if (brushCode === "TN") labelEl.textContent = "[TN] T+N (17h) ▼";
+    }
+  }
+
+  // Si el pincel activo es P, mostrar el texto descriptivo con las horas activas
+  if (brushCode === "P") {
+    const labelP = document.getElementById("label-brush-p");
+    if (labelP) {
+      labelP.textContent = `[P] Personaliz. (${AppState.customShift.hours}h)`;
     }
   }
 }
@@ -3152,8 +3169,9 @@ function initApp() {
       const activePanel = document.getElementById(`tab-${target}`);
       if (activePanel) activePanel.classList.remove("hidden");
 
+      clearActiveBrush();
+
       if (target === "calendar") {
-        clearActiveBrush();
         renderCalendar();
       }
       if (target === "table") renderTable();
@@ -3485,8 +3503,6 @@ function initApp() {
         AppState.targetCustomShiftDate = null;
       } else {
         setActiveBrush("P");
-        const labelP = document.getElementById("label-brush-p");
-        if (labelP) labelP.textContent = `[P] (${hours}h)`;
         if (modal) modal.classList.add("hidden");
         showToast(`Pincel [P] Personalizado activado (${AppState.customShift.start} a ${AppState.customShift.end}, +${hours}h)`, "info");
       }
