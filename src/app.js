@@ -121,7 +121,7 @@ const SHIFT_TYPES = {
   MN: { label: "Mañana + Noche", code: "MN", hours: 17.0, bg: "bg-fuchsia-100", text: "text-fuchsia-950", border: "border-fuchsia-300" },
   S: { label: "Saliente / Libre", code: "S", hours: 0.0, bg: "bg-slate-200", text: "text-slate-800", border: "border-slate-300" },
   V: { label: "Vacaciones", code: "V", hours: 7.0, bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300" },
-  LD: { label: "Moscoso", code: "LD", hours: 7.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
+  LD: { label: "Día LD", code: "LD", hours: 7.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
   DCI: { label: "Día DCI", code: "DCI", hours: -7.0, bg: "bg-cyan-100", text: "text-cyan-900", border: "border-cyan-400" },
   G: { label: "Guardia", code: "G", hours: 0.0, bg: "bg-fuchsia-100", text: "text-fuchsia-900", border: "border-fuchsia-300" }
 };
@@ -714,7 +714,7 @@ export function getAccumulatedMetrics() {
   // Por defecto en SAS: 22 días laborables de vacaciones y 6 días de LD al año.
   // Proporcional a días de contrato con redondeo SAS:
   // - Vacaciones a fracciones de 0,5 al alza (Math.ceil(val * 2) / 2)
-  // - LD proporcionales (para 269 días de 365, da 4.42 -> 5 días según criterio 6 * 9/12 = 4.5 -> 5)
+  // - Días LD proporcionales (regla SAS de 1 día por cada dos meses o redondeo proporcional estándar):
   const annualBaseVac = parseFloat(AppState.config.annualVacationDays) || 22.0;
   const annualBaseLd = parseFloat(AppState.config.annualLdDays) || 6.0;
 
@@ -722,7 +722,7 @@ export function getAccumulatedMetrics() {
   let totalLdDays = annualBaseLd;
   if (contractDays < yearDays && yearDays > 0) {
     totalVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
-    totalLdDays = Math.ceil((annualBaseLd * contractDays) / yearDays);
+    totalLdDays = Math.min(annualBaseLd, Math.round((annualBaseLd * contractDays) / yearDays));
   }
 
   let totalActiveDaysInYear = 0;
@@ -915,7 +915,7 @@ function renderKpis() {
   }
 
   // -------------------------------------------------------------
-  // TARJETA 3: Moscosos (Asuntos Propios / LD)
+  // TARJETA 3: Días de Libre Disposición (LD)
   // -------------------------------------------------------------
   const ldValueEl = document.getElementById("kpi-ld-value");
   const ldLabelEl = document.getElementById("kpi-ld-label");
@@ -1476,7 +1476,7 @@ function renderRequestLetter() {
       badge.className = "text-[11px] text-cyan-800 font-semibold bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200";
     }
   } else if (type === "moscosos") {
-    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Moscosos (LD)";
+    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Días LD";
     if (datesInput) datesInput.placeholder = "Ej: Días 15 y 16 de Mayo";
     if (badge) {
       badge.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días disponibles`;
@@ -1547,7 +1547,7 @@ Fdo. Responsable de Unidad / Supervisión:               Fecha: _____ / _____ / 
 CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
 UNIDAD / SERVICIO: ${service.toUpperCase()}
 
-ASUNTO: SOLICITUD DE DÍAS POR ASUNTOS PARTICULARES (DÍAS DE LIBRE DISPOSICIÓN / MOSCOSOS)
+ASUNTO: SOLICITUD DE DÍAS DE LIBRE DISPOSICIÓN (LD / ASUNTOS PARTICULARES)
 
 D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
@@ -1561,7 +1561,7 @@ TERCERO.- Que reuniendo los requisitos exigibles y con antelación suficiente pa
 
 SOLICITA:
 
-Que teniendo por presentado este escrito, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de DÍA(S) POR ASUNTOS PARTICULARES (MOSCOSOS / LD), proponiendo como fechas para su disfrute:
+Que teniendo por presentado este escrito, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de DÍA(S) DE LIBRE DISPOSICIÓN (LD / ASUNTOS PARTICULARES), proponiendo como fechas para su disfrute:
 
    >>> ${proposedDates.toUpperCase()} <<<
 
@@ -1936,7 +1936,7 @@ export function exportarPDF() {
       bg: [248, 250, 252]
     },
     {
-      label: "MOSCOSOS",
+      label: "DÍAS LD",
       val: `${metrics.remainingLdDays} / ${metrics.totalLdDays} d`,
       sub: "Días pendientes / Totales año",
       sub2: "",
@@ -2182,7 +2182,7 @@ export function exportarCSV() {
   const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
 
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Moscosos (LD);Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días LD;Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
 
   let runningAccum = 0;
   let totVacaciones = 0;
