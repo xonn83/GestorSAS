@@ -3198,6 +3198,34 @@ function initApp() {
     }
   });
 
+  // Botón "Comparte esta app" (Diálogo nativo de Android / Web Share API con fallback a mailto)
+  const btnShareApp = document.getElementById("btn-share-app");
+  if (btnShareApp) {
+    btnShareApp.addEventListener("click", async () => {
+      const shareUrl = window.location.href.split("#")[0].split("?")[0];
+      const shareText = "Prueba GestorSAS para llevar un mejor control de tu horario";
+
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: "GestorSAS",
+            text: shareText,
+            url: shareUrl
+          });
+          return;
+        } catch (err) {
+          if (err.name === "AbortError") return;
+          console.warn("navigator.share fallo o no disponible:", err);
+        }
+      }
+
+      // Fallback a mailto
+      const subject = encodeURIComponent("Prueba GestorSAS para llevar un mejor control de tu horario");
+      const body = encodeURIComponent(`Prueba GestorSAS para llevar un mejor control de tu horario:\n\n${shareUrl}`);
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    });
+  }
+
   // Asegurar que al inicio no haya ningún pincel preseleccionado
   clearActiveBrush();
 }

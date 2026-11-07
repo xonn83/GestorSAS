@@ -221,6 +221,17 @@
 
           <!-- FORMULARIO 2: NUEVO REGISTRO CON PARÁMETROS DE NOMBRAMIENTO -->
           <form id="form-register" class="space-y-3 hidden">
+            <!-- Aviso de fase de pruebas / descargo de responsabilidad -->
+            <div class="bg-amber-50 border border-amber-300/90 p-3 rounded-xl mb-2 text-amber-900 text-[11px] leading-relaxed flex items-start gap-2.5 shadow-2xs">
+              <svg class="w-4 h-4 text-amber-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+              </svg>
+              <div>
+                <strong class="font-bold text-amber-950 block mb-0.5">Aviso importante - Programa en fase de pruebas:</strong>
+                <span>Esta aplicación está en fase de pruebas continuas y el desarrollador no se hace responsable de posibles fallos o discrepancias en los cálculos. Se está trabajando constantemente para mejorarla y ya ofrece resultados satisfactorios en una multitud de situaciones y cuadrantes reales.</span>
+              </div>
+            </div>
+
             <div class="bg-emerald-50/70 border border-emerald-200/60 p-2.5 rounded-xl mb-2.5">
               <p class="text-[11px] text-emerald-900 font-medium leading-relaxed">
                 <strong>Alta de Profesional:</strong> Configura tu nombramiento inicial (interinidad, sustitución o plaza fija). Estos parámetros se guardarán en tu perfil en la nube y aparecerán protegidos en el cuadrante.
@@ -1034,6 +1045,15 @@
         <p class="font-medium text-slate-600">
           Gestor de Cuadrante SAS • Sistema de Auditoría Horaria Gerhonte
         </p>
+
+        <!-- Botón Compartir App -->
+        <button type="button" id="btn-share-app" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 cursor-pointer" title="Compartir GestorSAS con otros compañeros de trabajo">
+          <svg class="w-3.5 h-3.5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z"/>
+          </svg>
+          <span>Comparte esta app</span>
+        </button>
+
         <p class="text-slate-400">
           Sincronización segura en la nube SAS para profesionales estatutarios
         </p>
