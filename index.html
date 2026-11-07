@@ -574,26 +574,11 @@
 
       <!-- ============================================================== -->
       <!-- ============================================================== -->
-      <!-- SECCIÓN 2: TARJETAS KPI DE SALDO Y BOLSAS ESTATUTARIAS SAS     -->
+      <!-- SECCIÓN 2: TARJETAS KPI DE BOLSAS ESTATUTARIAS SAS             -->
       <!-- ============================================================== -->
-      <section class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 no-print">
+      <section class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-4 no-print">
         
-        <!-- KPI 1: Saldo Bolsa (General acumulado) -->
-        <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between relative overflow-hidden transition-all hover:shadow-md">
-          <div class="flex items-center justify-between gap-1 mb-1.5">
-            <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Saldo Bolsa</span>
-            <span id="kpi-balance-badge" class="hidden"></span>
-          </div>
-          <div class="my-0.5">
-            <span id="kpi-balance" class="text-xl sm:text-3xl font-black tracking-tight text-emerald-600 font-mono block">+0,0 h</span>
-            <p id="kpi-balance-label" class="text-[10px] sm:text-xs font-semibold text-emerald-800 mt-0.5 truncate">Exceso acumulado</p>
-          </div>
-          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
-            <span id="kpi-balance-sub" class="truncate font-mono">0.0h / 0.0h exig.</span>
-          </div>
-        </div>
-
-        <!-- KPI 2: Bolsa DCI (Exceso Real) -->
+        <!-- KPI 1: Bolsa DCI (Exceso Real) -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa DCI (Exceso Real)</span>
@@ -603,12 +588,12 @@
             <span id="kpi-dci-hours" class="text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block">0 Días</span>
             <p id="kpi-dci-label" class="text-[10px] sm:text-xs font-semibold text-slate-600 mt-0.5 truncate">0,0 h netas de exceso (÷ 7h)</p>
           </div>
-          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
+          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between min-h-[25px]">
             <span id="kpi-dci-sub" class="truncate font-mono">0 d disfrutados en cuadrante</span>
           </div>
         </div>
 
-        <!-- KPI 3: Bolsa Vacaciones -->
+        <!-- KPI 2: Bolsa Vacaciones -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Bolsa Vacaciones</span>
@@ -618,12 +603,12 @@
             <span id="kpi-vac-value" class="text-xl sm:text-3xl font-black tracking-tight text-slate-900 font-mono block">0 / 0 días</span>
             <p id="kpi-vac-label" class="hidden"></p>
           </div>
-          <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between">
-            <span id="kpi-vac-sub" class="truncate font-mono">(a Octubre)</span>
+          <div class="pt-2 border-t border-slate-100/60 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between min-h-[25px]">
+            <span id="kpi-vac-sub" class="truncate font-mono"></span>
           </div>
         </div>
 
-        <!-- KPI 4: Moscosos -->
+        <!-- KPI 3: Moscosos -->
         <div class="bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md">
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">Moscosos</span>

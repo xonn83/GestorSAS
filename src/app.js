@@ -819,45 +819,7 @@ function renderKpis() {
   const metrics = getAccumulatedMetrics();
 
   // -------------------------------------------------------------
-  // TARJETA 1: Saldo Bolsa (General acumulado a meses rellenados)
-  // -------------------------------------------------------------
-  const balanceEl = document.getElementById("kpi-balance");
-  const balanceLabel = document.getElementById("kpi-balance-label");
-  const balanceBadge = document.getElementById("kpi-balance-badge");
-  const balanceSub = document.getElementById("kpi-balance-sub");
-
-  if (balanceBadge) {
-    balanceBadge.className = "hidden";
-  }
-
-  if (balanceEl) {
-    const sign = metrics.accumulatedBalance > 0 ? "+" : "";
-    balanceEl.textContent = `${sign}${metrics.accumulatedBalance.toLocaleString("es-ES", { minimumFractionDigits: 1 })} h`;
-
-    if (metrics.filledMonthsCount === 0) {
-      balanceEl.className = "text-xl sm:text-3xl font-black text-slate-700 tracking-tight font-mono block";
-      if (balanceLabel) balanceLabel.textContent = "Sin registros aún";
-      if (balanceSub) balanceSub.textContent = `0,0h de ${metrics.totalContractReq.toFixed(0)}h anuales`;
-    } else {
-      if (metrics.accumulatedBalance > 0) {
-        balanceEl.className = "text-xl sm:text-3xl font-black text-emerald-600 tracking-tight font-mono block";
-        if (balanceLabel) balanceLabel.textContent = `Exceso hasta ${metrics.lastFilledMonthName}`;
-        const dciLabel = metrics.dciDaysAvailable === 1 ? "1 d DCI disponible" : `${metrics.dciDaysAvailable} d DCI disponibles`;
-        if (balanceSub) balanceSub.textContent = `+${metrics.accumulatedBalance.toFixed(1)}h acumuladas (${dciLabel})`;
-      } else if (metrics.accumulatedBalance < 0) {
-        balanceEl.className = "text-xl sm:text-3xl font-black text-rose-600 tracking-tight font-mono block";
-        if (balanceLabel) balanceLabel.textContent = `Déficit hasta ${metrics.lastFilledMonthName}`;
-        if (balanceSub) balanceSub.textContent = `Faltan ${Math.abs(metrics.accumulatedBalance).toFixed(1)}h para completar la jornada ordinaria`;
-      } else {
-        balanceEl.className = "text-xl sm:text-3xl font-black text-slate-800 tracking-tight font-mono block";
-        if (balanceLabel) balanceLabel.textContent = `Al día hasta ${metrics.lastFilledMonthName}`;
-        if (balanceSub) balanceSub.textContent = `${metrics.workedInFilledMonths.toFixed(1)}h realizadas (Jornada ordinaria al día)`;
-      }
-    }
-  }
-
-  // -------------------------------------------------------------
-  // TARJETA 2: Bolsa DCI (Exceso Real)
+  // TARJETA 1: Bolsa DCI (Exceso Real)
   // -------------------------------------------------------------
   const dciHoursEl = document.getElementById("kpi-dci-hours");
   const dciDaysEl = document.getElementById("kpi-dci-days");
@@ -870,9 +832,17 @@ function renderKpis() {
   }
 
   if (dciHoursEl) {
-    const signDci = metrics.dciDaysAvailable > 0 ? "+" : "";
-    const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
-    dciHoursEl.textContent = `${signDci}${metrics.dciDaysAvailable} ${dayWord}`;
+    if (metrics.dciDaysAvailable > 0) {
+      const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
+      dciHoursEl.textContent = `+${metrics.dciDaysAvailable} ${dayWord}`;
+      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block";
+    } else if (metrics.accumulatedBalance < 0) {
+      dciHoursEl.textContent = `${metrics.accumulatedBalance.toFixed(1)} h`;
+      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-rose-600 font-mono block";
+    } else {
+      dciHoursEl.textContent = "0 Días";
+      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-slate-700 font-mono block";
+    }
   }
   if (dciDaysEl) {
     const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
@@ -881,8 +851,10 @@ function renderKpis() {
   if (dciLabelEl) {
     if (metrics.dciNetHours > 0) {
       dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">+${metrics.dciNetHours.toFixed(1)} h netas</span> (+${metrics.dciRemainderHours}h remanente)`;
+    } else if (metrics.accumulatedBalance < 0) {
+      dciLabelEl.innerHTML = `<span class="font-bold text-rose-700">Déficit acumulado de jornada ordinaria</span>`;
     } else {
-      dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Sin exceso de jornada acumulado" : "0 días libres disponibles (÷ 7h)";
+      dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Jornada ordinaria al día (sin exceso)" : "0 días libres disponibles (÷ 7h)";
     }
   }
   if (dciSubEl) {
@@ -890,7 +862,7 @@ function renderKpis() {
   }
 
   // -------------------------------------------------------------
-  // TARJETA 3: Bolsa Vacaciones
+  // TARJETA 2: Bolsa Vacaciones
   // -------------------------------------------------------------
   const vacValueEl = document.getElementById("kpi-vac-value");
   const vacLabelEl = document.getElementById("kpi-vac-label");
@@ -908,11 +880,11 @@ function renderKpis() {
     vacLabelEl.textContent = "";
   }
   if (vacSubEl) {
-    vacSubEl.textContent = metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)";
+    vacSubEl.textContent = "";
   }
 
   // -------------------------------------------------------------
-  // TARJETA 4: Moscosos (Asuntos Propios / LD)
+  // TARJETA 3: Moscosos (Asuntos Propios / LD)
   // -------------------------------------------------------------
   const ldValueEl = document.getElementById("kpi-ld-value");
   const ldLabelEl = document.getElementById("kpi-ld-label");
@@ -1880,55 +1852,39 @@ export function exportarPDF() {
   // 3. Recuadros Superiores de Resumen (KPIs)
   const kpiY = 57;
   const kpiH = 22;
-  const cardGap = 3;
-  const cardW = (contentWidth - (cardGap * 3)) / 4;
+  const cardGap = 4;
+  const cardW = (contentWidth - (cardGap * 2)) / 3;
 
-  const balanceSign = metrics.accumulatedBalance > 0 ? "+" : "";
-  const balanceVal = `${balanceSign}${metrics.accumulatedBalance.toFixed(1)} h`;
-  const balanceState = metrics.filledMonthsCount === 0
-    ? "Sin registros"
-    : (metrics.accumulatedBalance > 0
-        ? "A FAVOR (Exceso)"
-        : (metrics.accumulatedBalance < 0 ? "DÉFICIT" : "AL DÍA"));
-  const balanceSub = metrics.filledMonthsCount === 0
-    ? `0h de ${metrics.totalContractReq.toFixed(0)}h`
-    : `Auditado a ${metrics.lastFilledMonthName || "mes"}`;
-  const balanceColor = metrics.accumulatedBalance > 0
-    ? [21, 128, 61]
-    : (metrics.accumulatedBalance < 0 ? [185, 28, 28] : [51, 65, 85]);
-  const balanceBg = metrics.accumulatedBalance > 0
-    ? [240, 253, 244]
-    : (metrics.accumulatedBalance < 0 ? [254, 242, 242] : [248, 250, 252]);
+  const dciVal = metrics.dciDaysAvailable > 0
+    ? `+${metrics.dciDaysAvailable} DÍAS`
+    : (metrics.accumulatedBalance < 0 ? `${metrics.accumulatedBalance.toFixed(1)} h` : "0 DÍAS");
+  const dciSub = metrics.dciNetHours > 0
+    ? `+${metrics.dciNetHours.toFixed(1)} h netas (÷ 7h)`
+    : (metrics.accumulatedBalance < 0 ? "Déficit de jornada" : "Jornada al día");
+  const dciColor = metrics.accumulatedBalance < 0 ? [185, 28, 28] : [4, 120, 87];
+  const dciBg = metrics.accumulatedBalance < 0 ? [254, 242, 242] : [236, 253, 245];
 
   const cards = [
     {
-      label: "SALDO BOLSA",
-      val: balanceVal,
-      sub: balanceState,
-      sub2: balanceSub,
-      color: balanceColor,
-      bg: balanceBg
-    },
-    {
       label: "BOLSA DCI (EXCESO REAL)",
-      val: `${metrics.dciDaysAvailable} DÍAS`,
-      sub: metrics.dciNetHours > 0 ? `+${metrics.dciNetHours.toFixed(1)} h netas (÷ 7h)` : "Sin exceso acumulado",
+      val: dciVal,
+      sub: dciSub,
       sub2: `${metrics.totalDciConsumedDays} d DCI disfrutados`,
-      color: [4, 120, 87],
-      bg: [236, 253, 245]
+      color: dciColor,
+      bg: dciBg
     },
     {
       label: "BOLSA VACACIONES",
       val: `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} d`,
-      sub: "Días por disfrutar / Acumulados",
-      sub2: metrics.lastFilledMonthName ? `(a ${metrics.lastFilledMonthName})` : "(anual)",
+      sub: "Días pendientes / Totales año",
+      sub2: "",
       color: [15, 23, 42],
       bg: [248, 250, 252]
     },
     {
       label: "MOSCOSOS",
       val: `${metrics.remainingLdDays} / ${metrics.totalLdDays} d`,
-      sub: "Días por disfrutar / Acumulados",
+      sub: "Días pendientes / Totales año",
       sub2: "",
       color: [88, 28, 135],
       bg: [250, 245, 255]
