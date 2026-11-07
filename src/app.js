@@ -240,20 +240,21 @@ function formatISODate(year, month, day) {
   return `${year}-${m}-${d}`;
 }
 
-export function getContractDaysTotal() {
-  const start = parseISODate(AppState.config.startDate);
-  const end = AppState.config.endDate ? parseISODate(AppState.config.endDate) : new Date(start.getFullYear(), 11, 31);
-  if (end < start) return 0;
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  return Math.round(diffTime / (1000 * 60 * 60 * 24)) + 1;
+export function getContractDaysTotal(targetYear = AppState.calendarYear) {
+  if (!AppState.config.startDate) return 0;
+  let total = 0;
+  for (let m = 0; m < 12; m++) {
+    total += getMonthActiveContractDays(targetYear, m);
+  }
+  return total;
 }
 
-export function getContractRequiredHoursTotal() {
-  const totalDays = getContractDaysTotal();
-  const start = parseISODate(AppState.config.startDate);
-  const yearDays = getDaysInYear(start.getFullYear());
-  const baseHours = parseFloat(AppState.config.baseHours) || 1483;
-  return Math.round((totalDays / yearDays) * baseHours);
+export function getContractRequiredHoursTotal(targetYear = AppState.calendarYear) {
+  let total = 0;
+  for (let m = 0; m < 12; m++) {
+    total += getMonthRequiredHours(targetYear, m);
+  }
+  return parseFloat(total.toFixed(1));
 }
 
 export function getMonthActiveContractDays(year, month) {
@@ -668,8 +669,8 @@ export function updateAll(skipTableRebuild = false) {
 export function getAccumulatedMetrics() {
   const year = AppState.calendarYear;
   const yearDays = getDaysInYear(year);
-  const totalContractReq = getContractRequiredHoursTotal();
-  const contractDays = getContractDaysTotal();
+  const totalContractReq = getContractRequiredHoursTotal(year);
+  const contractDays = getContractDaysTotal(year);
 
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
