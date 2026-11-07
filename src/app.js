@@ -290,6 +290,41 @@ export function isDateInsideContract(dateStr) {
   return d >= start && (!end || d <= end);
 }
 
+export function purgeShiftsOutsideContract() {
+  if (!AppState.config.startDate) return 0;
+  let purgedCount = 0;
+  const shiftDates = Object.keys(AppState.calendarShifts || {});
+  shiftDates.forEach(dateStr => {
+    if (!isDateInsideContract(dateStr)) {
+      delete AppState.calendarShifts[dateStr];
+      purgedCount++;
+    }
+  });
+
+  // Resincronizar cada mes para asegurar que los turnos purgados no sigan en la tabla
+  const year = AppState.calendarYear;
+  for (let m = 0; m < 12; m++) {
+    const actDays = getMonthActiveContractDays(year, m);
+    if (actDays === 0) {
+      const row = AppState.monthlyTableData[m];
+      if (row) {
+        row.mananas = 0;
+        row.tardes = 0;
+        row.noches = 0;
+        row.vacaciones = 0;
+        row.moscosos = 0;
+        row.dciHoras = 0;
+        row.guardias = 0;
+        row.isManual = false;
+      }
+    } else {
+      syncCalendarMonthToTable(m);
+    }
+  }
+
+  return purgedCount;
+}
+
 export function syncCalendarMonthToTable(month) {
   const year = AppState.calendarYear;
   const row = AppState.monthlyTableData[month];
@@ -447,7 +482,9 @@ export function ensureTwoWaySync() {
     let mCount = 0, tCount = 0, nCount = 0, vCount = 0, ldCount = 0, dciCount = 0;
     
     for (let d = 1; d <= daysInMonth; d++) {
-      const shift = AppState.calendarShifts[formatISODate(year, m, d)];
+      const dateStr = formatISODate(year, m, d);
+      if (!isDateInsideContract(dateStr)) continue;
+      const shift = AppState.calendarShifts[dateStr];
       if (shift === "M") mCount++;
       else if (shift === "T") tCount++;
       else if (shift === "N") nCount++;
@@ -684,6 +721,7 @@ export function syncYearDropdown() {
 // RENDERIZADO Y ACTUALIZACIÓN DE LA UI
 // -------------------------------------------------------------
 export function updateAll(skipTableRebuild = false) {
+  purgeShiftsOutsideContract();
   syncYearDropdown();
   ensureTwoWaySync();
   renderKpis();
@@ -966,7 +1004,7 @@ function renderCalendar() {
   for (let day = 1; day <= daysInCurrentMonth; day++) {
     const dateStr = formatISODate(year, month, day);
     const inContract = isDateInsideContract(dateStr);
-    const shiftCode = AppState.calendarShifts[dateStr];
+    const shiftCode = inContract ? AppState.calendarShifts[dateStr] : null;
 
     if (shiftCode) {
       if (shiftCode === "M") mCount++;
@@ -2846,11 +2884,17 @@ function initApp() {
       const startYear = parseISODate(AppState.config.startDate).getFullYear();
       AppState.calendarYear = startYear;
 
+      const purged = purgeShiftsOutsideContract();
+
       syncConfigInputsFromState();
       updateAll();
       triggerSave(true);
       editModal.classList.add("hidden");
-      showToast("¡Parámetros del nombramiento actualizados con éxito!", "success");
+      if (purged > 0) {
+        showToast(`¡Parámetros actualizados! Se han eliminado ${purged} turno(s) que quedaban fuera del nuevo periodo de contrato.`, "info");
+      } else {
+        showToast("¡Parámetros del nombramiento actualizados con éxito!", "success");
+      }
     });
   }
 
