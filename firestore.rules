@@ -55,5 +55,10 @@ service cloud.firestore {
         allow delete: if isOwner(userId) && isValidId(userId) && isValidId(docId);
       }
     }
+
+    match /migrated_users/{emailDoc} {
+      allow get: if isSignedIn() && request.auth.token.email.lower() == emailDoc.lower();
+      allow write: if false;
+    }
   }
 }

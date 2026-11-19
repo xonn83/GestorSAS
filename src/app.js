@@ -44,20 +44,21 @@ function applyAutoTable(doc, options) {
 
 // Configuración de Firebase (Firestore y Auth)
 const firebaseConfig = {
-  projectId: "project-1467a636-3021-45cc-a8a",
-  appId: "1:896430339153:web:764be492dae50307bf7470",
-  apiKey: "AIzaSyB1um45SuQ9Xu5uZzf9SYU1a-LLnwvLDCo",
-  authDomain: "project-1467a636-3021-45cc-a8a.firebaseapp.com",
-  firestoreDatabaseId: "ai-studio-sasguardmanager-cf6bc013-557f-485e-9a30-3bda27053de1",
-  storageBucket: "project-1467a636-3021-45cc-a8a.firebasestorage.app",
-  messagingSenderId: "896430339153"
+  projectId: "gestorsas",
+  appId: "1:37136597686:web:19d09a26fc355b20aedc17",
+  apiKey: "AIzaSyAKml2mfZ_99i-lBvFXv3gK8zY47sdDdco",
+  authDomain: "gestorsas.firebaseapp.com",
+  storageBucket: "gestorsas.firebasestorage.app",
+  messagingSenderId: "37136597686"
 };
 
 let app, auth, db;
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  db = firebaseConfig.firestoreDatabaseId 
+    ? getFirestore(app, firebaseConfig.firestoreDatabaseId) 
+    : getFirestore(app);
 } catch (e) {
   console.warn("Inicialización de Firebase:", e);
 }
@@ -819,7 +820,33 @@ export async function loadUserData(user) {
     }
 
     const cuadranteRef = doc(db, "users", uid, "data", "cuadrante");
-    const cuadranteSnap = await getDoc(cuadranteRef);
+    let cuadranteSnap = await getDoc(cuadranteRef);
+
+    // Si no existe cuadrante aún para este UID, verificar si existen datos migrados previos por email
+    if (!cuadranteSnap.exists() && user.email) {
+      try {
+        const safeDocId = user.email.toLowerCase().trim().replace(/[^a-zA-Z0-9_@.-]/g, '_');
+        const migSnap = await getDoc(doc(db, "migrated_users", safeDocId));
+        if (migSnap.exists()) {
+          const migData = migSnap.data();
+          if (migData.profile) {
+            await setDoc(userDocRef, { ...migData.profile, userId: uid, updatedAt: new Date().toISOString() }, { merge: true });
+            if (migData.profile.workerName) AppState.config.workerName = migData.profile.workerName;
+            if (migData.profile.category) AppState.config.category = migData.profile.category;
+            if (migData.profile.center) AppState.config.center = migData.profile.center;
+            if (migData.profile.service) AppState.config.service = migData.profile.service;
+            if (migData.profile.dni) AppState.config.dni = migData.profile.dni;
+          }
+          if (migData.cuadrante) {
+            await setDoc(cuadranteRef, { ...migData.cuadrante, userId: uid, updatedAt: new Date().toISOString() });
+            cuadranteSnap = await getDoc(cuadranteRef);
+          }
+        }
+      } catch (migErr) {
+        console.warn("Recuperación de cuadrante migrado:", migErr);
+      }
+    }
+
     if (cuadranteSnap.exists()) {
       const cData = cuadranteSnap.data();
       if (cData.startDate) AppState.config.startDate = cData.startDate;
@@ -2977,35 +3004,61 @@ function initApp() {
               updatedAt: new Date().toISOString()
             });
 
-            await setDoc(doc(db, "users", user.uid, "data", "cuadrante"), {
-              userId: user.uid,
-              startDate: startDate,
-              endDate: endDate,
-              regime: regime,
-              baseHours: baseHours,
-              hoursM: 7.0,
-              hoursT: 7.0,
-              hoursN: 10.0,
-              hoursS: 0.0,
-              hoursV: 7.0,
-              hoursLD: 7.0,
-              hoursDCI: 7.0,
-              proposedDates: "",
-              calendarShifts: {},
-              monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
-                month: i,
-                mananas: 0,
-                tardes: 0,
-                noches: 0,
-                vacaciones: 0,
-                moscosos: 0,
-                dciHoras: 0,
-                guardias: 0,
-                isManual: false
-              })),
-              calendarYear: parseISODate(startDate).getFullYear(),
-              updatedAt: new Date().toISOString()
-            });
+            // Comprobar si hay datos de cuadrante migrados antes de inicializar vacío
+            let existingCuadrante = null;
+            try {
+              const safeDocId = email.toLowerCase().trim().replace(/[^a-zA-Z0-9_@.-]/g, '_');
+              const migSnap = await getDoc(doc(db, "migrated_users", safeDocId));
+              if (migSnap.exists() && migSnap.data().cuadrante) {
+                existingCuadrante = migSnap.data().cuadrante;
+              }
+            } catch (eMig) {
+              console.warn("Check migrated cuadrante:", eMig);
+            }
+
+            if (existingCuadrante) {
+              await setDoc(doc(db, "users", user.uid, "data", "cuadrante"), {
+                ...existingCuadrante,
+                userId: user.uid,
+                startDate: startDate || existingCuadrante.startDate,
+                endDate: endDate !== undefined ? endDate : existingCuadrante.endDate,
+                regime: regime || existingCuadrante.regime,
+                baseHours: baseHours || existingCuadrante.baseHours,
+                updatedAt: new Date().toISOString()
+              });
+              if (existingCuadrante.calendarShifts) AppState.calendarShifts = existingCuadrante.calendarShifts;
+              if (existingCuadrante.monthlyTableData) AppState.monthlyTableData = existingCuadrante.monthlyTableData;
+            } else {
+              await setDoc(doc(db, "users", user.uid, "data", "cuadrante"), {
+                userId: user.uid,
+                startDate: startDate,
+                endDate: endDate,
+                regime: regime,
+                baseHours: baseHours,
+                hoursM: 7.0,
+                hoursT: 7.0,
+                hoursN: 10.0,
+                hoursS: 0.0,
+                hoursV: 7.0,
+                hoursLD: 7.0,
+                hoursDCI: 7.0,
+                proposedDates: "",
+                calendarShifts: {},
+                monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
+                  month: i,
+                  mananas: 0,
+                  tardes: 0,
+                  noches: 0,
+                  vacaciones: 0,
+                  moscosos: 0,
+                  dciHoras: 0,
+                  guardias: 0,
+                  isManual: false
+                })),
+                calendarYear: parseISODate(startDate).getFullYear(),
+                updatedAt: new Date().toISOString()
+              });
+            }
           } catch (syncErr) {
             console.warn("Firestore save warning:", syncErr);
           }
@@ -3172,6 +3225,7 @@ function initApp() {
       clearActiveBrush();
 
       if (target === "calendar") {
+        clearActiveBrush();
         renderCalendar();
       }
       if (target === "table") renderTable();
@@ -3503,6 +3557,8 @@ function initApp() {
         AppState.targetCustomShiftDate = null;
       } else {
         setActiveBrush("P");
+        const labelP = document.getElementById("label-brush-p");
+        if (labelP) labelP.textContent = `[P] (${hours}h)`;
         if (modal) modal.classList.add("hidden");
         showToast(`Pincel [P] Personalizado activado (${AppState.customShift.start} a ${AppState.customShift.end}, +${hours}h)`, "info");
       }
