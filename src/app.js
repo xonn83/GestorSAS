@@ -432,11 +432,22 @@ export function getMonthActiveContractDays(year, month) {
 export function getMonthRequiredHours(year, month) {
   const activeDays = getMonthActiveContractDays(year, month);
   if (activeDays === 0) return 0.0;
-  const daysInMonth = getDaysInMonth(year, month);
+  const daysInYear = getDaysInYear(year);
   const baseHours = parseFloat(AppState.config.baseHours) || 1540;
-  const monthlyBase = baseHours / 11;
-  const monthRatio = daysInMonth > 0 ? (activeDays / daysInMonth) : 0;
-  return parseFloat((monthlyBase * monthRatio).toFixed(1));
+  const dailyRate = baseHours / daysInYear;
+
+  // Cómputo exacto por diferencia acumulada para garantizar que la suma
+  // de las cuotas mensuales coincida con exactitud matemática con la jornada anual prorrateada
+  let cumDaysBefore = 0;
+  for (let m = 0; m < month; m++) {
+    cumDaysBefore += getMonthActiveContractDays(year, m);
+  }
+  const cumDaysCurrent = cumDaysBefore + activeDays;
+
+  const cumHoursCurrent = Math.round(dailyRate * cumDaysCurrent * 10) / 10;
+  const cumHoursBefore = Math.round(dailyRate * cumDaysBefore * 10) / 10;
+
+  return parseFloat((cumHoursCurrent - cumHoursBefore).toFixed(1));
 }
 
 export function isDateInsideContract(dateStr) {
@@ -1696,6 +1707,8 @@ function updateTableComputedCells() {
 
   const tfoot = document.getElementById("gerhonte-table-totals");
   if (tfoot) {
+    const finalSign = runningAccumBalance > 0.05 ? "+" : "";
+    const finalAccColor = runningAccumBalance > 0.05 ? 'text-emerald-700' : (runningAccumBalance < -0.05 ? 'text-rose-600' : 'text-slate-900');
     tfoot.innerHTML = `
       <td class="sticky left-0 bg-slate-100 z-10 py-3 px-3 text-left font-black border-r border-slate-300 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">TOTAL AUDITADO (${year})</td>
       <td class="py-3 px-2 font-mono text-center">${totActiveDays} d</td>
@@ -1710,7 +1723,7 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDajCount} d</td>
       <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center text-slate-400">-</td>
-      <td class="py-3 px-3 font-mono text-center text-slate-400">-</td>
+      <td class="py-3 px-3 font-mono text-center font-black ${finalAccColor}">${finalSign}${runningAccumBalance.toFixed(1)} h</td>
     `;
   }
 }
@@ -2364,7 +2377,7 @@ export function exportarPDF() {
     `${totDajCount} d`,
     `${totActualHours.toFixed(1)} h`,
     "-",
-    "-"
+    `${runningAccum > 0.05 ? '+' : ''}${runningAccum.toFixed(1)} h`
   ]];
 
   applyAutoTable(doc, {
@@ -2415,7 +2428,7 @@ export function exportarPDF() {
       13: { cellWidth: 16, fontStyle: "bold" }
     },
     didParseCell: function(data) {
-      if (data.section === "body") {
+      if (data.section === "body" || data.section === "foot") {
         const text = data.cell.raw || "";
         if (data.column.index === 12 || data.column.index === 13) {
           if (typeof text === "string" && text.startsWith("+")) {
