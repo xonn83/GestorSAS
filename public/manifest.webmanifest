@@ -2,7 +2,7 @@
   "id": "gestor-sas-cuadrante-app",
   "name": "Gestor de Cuadrante SAS",
   "short_name": "GestorSAS",
-  "description": "Control de jornada anual, turnos y cómputo de bolsa DCI en el Servicio Andaluz de Salud",
+  "description": "Control de jornada anual, turnos y cómputo de bolsa de horas en el Servicio Andaluz de Salud",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -1,62 +1,61 @@
 # Gestor de Cuadrante y Auditor de Jornada SAS (Gerhonte)
 
-Herramienta profesional diseñada para profesionales del **Servicio Andaluz de Salud (SAS)** que permite auditar y llevar el control exhaustivo de su jornada laboral anual, turnos realizados, cómputo proporcional de nombramientos (interinidades y sustituciones) y el cálculo de la bolsa de horas para acumulación y solicitud de **Días de Compensación por Incidencias / Exceso de Jornada (DCI)**.
+Herramienta profesional diseñada para profesionales del **Servicio Andaluz de Salud (SAS)** que permite auditar y llevar el control exhaustivo de su jornada laboral anual, turnos realizados, cómputo proporcional de nombramientos (interinidades y sustituciones) y el cálculo de la bolsa de horas para acumulación y solicitud de **Días de Ajuste de Jornada por Exceso (DAJ)** y **Días de Carácter Individual (DCI)**.
 
 ---
 
 ## 📋 Características Principales
 
 1. **Calendario Interactivo Día a Día**:
-   - Asignación rápida de turnos mediante paleta de pinceles visuales o atajos de teclado (`M`, `T`, `N`, `2`/`B`, `V`, `L`, `D`, `X`/Borrar).
-   - Control de validación automática: En régimen diurno (L-V), el sistema avisa e impide asignar vacaciones (V), moscosos (LD) o descansos DCI en fines de semana (sábados y domingos no laborables).
+   - Asignación rápida de turnos mediante paleta de pinceles visuales o atajos de teclado (`M`, `T`, `N`, `1`, `2`/`B`, `3`, `P`, `V`, `L`/`I`, `D`/`A`, `X`/Borrar).
+   - Control de validación automática: En régimen diurno (L-V), el sistema avisa e impide asignar vacaciones (V), días DCI o ajustes DAJ en fines de semana (sábados y domingos no laborables).
    - Tipos de turno operativos:
      - **[M] Mañana**: +7,0 horas efectivas.
      - **[T] Tarde**: +7,0 horas efectivas.
      - **[N] Noche**: +10,0 horas efectivas.
      - **[MN] Mañana + Noche (Doble Turno)**: +17,0 horas efectivas (7h de mañana + 10h de noche), computadas íntegramente en la fecha en que se inicia la jornada conforme al criterio de registro Gerhonte del SAS.
-     - **[V] Vacaciones**: +7,0 horas efectivas (en días laborables de lunes a viernes en régimen diurno).
-     - **[LD] Moscoso (Asuntos Particulares)**: +7,0 horas efectivas.
-     - **[DCI] Día de Descanso Compensatorio**: -7,0 horas del exceso acumulado a favor.
+     - **[V] Vacaciones**: 0 horas en cómputo trabajado (cómputo en base neta; descuenta 1 día de la bolsa de vacaciones).
+     - **[DCI] Día DCI (Libre Disposición)**: 0 horas en cómputo trabajado (cómputo en base neta; descuenta 1 día del cupo de DCI).
+     - **[DAJ] Ajuste de Jornada (Exceso)**: 0 horas en cómputo trabajado (descanso por exceso acumulado; el balance mensual descuenta la jornada automáticamente al no trabajarse).
 
 2. **Cuatro Tarjetas de Control y Bolsas Estatutarias**:
-   - **Saldo Bolsa**: Balance horario acumulado consolidado a fecha del último mes auditado.
-   - **Bolsa DCI (Exceso Real)**: Horas netas reales acumuladas por turnos presenciales por encima de la base mensual menos los DCI disfrutados, con conversión directa en días completos libres disponibles (Horas ÷ 7).
-   - **Bolsa Vacaciones**: Días de vacaciones consumidos frente al total devengado según nombramiento (ej. 6 / 16,5 días) y días pendientes por librar.
-   - **Bolsa Asuntos Propios (LD)**: Días de moscosos consumidos frente al cupo asignado según nombramiento (ej. 0 / 5 días) y días pendientes por librar.
+   - **Exceso Jornada (DAJ)**: Horas netas reales acumuladas por turnos presenciales por encima de la cuota exigible del nombramiento, con conversión directa en días completos libres disponibles (Horas ÷ 7) y contador de DAJ disfrutados.
+   - **Bolsa Vacaciones**: Días de vacaciones consumidos frente al total devengado según nombramiento (22 días hábiles/año completo prorrateados estrictamente por contrato) y días pendientes por librar.
+   - **Días DCI (Libre Disposición)**: Días consumidos frente al cupo reconocido según contrato (6 días/año completo, 1 día cada 2 meses) y días disponibles.
 
 3. **Resumen y Auditoría Numérica Mensual (Gerhonte)**:
-   - Separación estricta de **Horas Presenciales** (físicas trabajadas) y **Horas de Permisos** (crédito retribuido por Vacaciones/LD a 7h/día).
-   - Columna final dedicada a **DCI Netos Acumulados Pendientes de Disfrutar**, reflejando con exactitud el exceso de jornada real que el centro adeuda al trabajador.
+   - Separación estricta de **Horas Presenciales** (físicas trabajadas) y **Permisos** (en base neta computan 0h).
+   - Columna dedicada a **DAJ Disfrutados**, reflejando con exactitud los descansos por exceso en cuadrante.
    - Sincronización bidireccional inmediata entre la cuadrícula del calendario y la tabla mensual.
 
-4. **Generador de Solicitud Formal DCI**:
-   - Redacción automática de la instancia administrativa oficial dirigida a la Dirección/Jefatura de Personal del SAS, con detalle de fechas propuestas, saldo acumulado y fundamentación legal.
+4. **Generador de Solicitud Formal**:
+   - Redacción automática de la instancia administrativa oficial dirigida a la Dirección/Jefatura de Personal del SAS para DAJ (ajuste por exceso), DCI (libre disposición) y Vacaciones, con detalle de fechas propuestas, saldo acumulado y fundamentación legal.
    - Opciones directas para imprimir en formato administrativo oficial o copiar al portapapeles.
 
 5. **Normativa y Repositorio Documental Oficial**:
-   - Resumen claro de la normativa estatutaria de aplicación en el SAS (jornada de 35 horas, descansos obligatorios, salientes de noche y régimen DCI).
+   - Resumen claro de la normativa estatutaria de aplicación en el SAS (jornada de 35 horas en base neta, descansos obligatorios, salientes de noche y régimen DAJ / DCI).
    - Enlaces directos a las publicaciones oficiales en BOE, BOJA y el portal institucional del Servicio Andaluz de Salud (SSPA).
 
 6. **Persistencia Dual (Nube + Modo Local Seguro)**:
    - Sincronización en la nube mediante **Firebase Authentication** y **Cloud Firestore** con reglas de seguridad ABAC por usuario.
    - Modo local automático con `localStorage` ante desconexión o uso sin registro.
-   - Exportación de informe oficial de auditoría y cuadrante en formato **PDF** descargable (con membrete SAS, ficha del profesional y nombramiento, las 4 tarjetas resumen de bolsas y la tabla mensual completa Gerhonte de 15 columnas).
+   - Exportación de informe oficial de auditoría y cuadrante en formato **PDF** descargable (con membrete SAS, ficha del profesional y nombramiento, las tarjetas resumen de bolsas y la tabla mensual completa Gerhonte).
 
 ---
 
 ## ⚖️ Normativa SAS y Fórmulas de Cómputo
 
-- **Jornada Anual Base (Decreto 35 horas semanales / Mesa Sectorial SAS)**:
-  - *Diurno Ordinario*: 1.540 horas netas anuales.
+- **Jornada Anual Base Efectiva / Neta (Decreto 35 horas semanales / Mesa Sectorial SAS)**:
+  - *Diurno Ordinario*: 1.540 horas netas anuales (descontadas vacaciones y DCI).
   - *Rotatorio (con noches)*: 1.483 horas netas anuales (ponderación por penosidad nocturna).
   - *Nocturno Fijo*: 1.450 horas netas anuales.
 
 - **Cómputo Proporcional para Sustitutos e Interinos**:
   $$\text{Jornada Exigible} = \text{round}\left( \frac{\text{Días Activos del Nombramiento}}{\text{Días del Año (365 o 366)}} \times \text{Jornada Base} \right)$$
 
-- **Bolsa de Días DCI**:
-  - Por cada **7,0 horas** de exceso consolidado se genera derecho a **1 día completo DCI**.
-  - El disfrute de 1 DCI resta 7,0 horas del exceso sin minorar la retribución ordinaria mensual.
+- **Días de Ajuste de Jornada (DAJ)**:
+  - Por cada **7,0 horas** de exceso consolidado se genera derecho a **1 día completo DAJ**.
+  - Al no trabajar un día ordinario por disfrute de DAJ, el cómputo de horas trabajadas suma 0h, equilibrando la jornada debida de forma natural.
 
 ---
 

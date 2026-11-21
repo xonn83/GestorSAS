@@ -131,9 +131,10 @@ const SHIFT_TYPES = {
   TN: { label: "Tarde + Noche", code: "TN", hours: 17.0, bg: "bg-violet-100", text: "text-violet-950", border: "border-violet-400" },
   P: { label: "Personalizado", code: "P", hours: 0.0, bg: "bg-teal-100", text: "text-teal-950", border: "border-teal-400" },
   S: { label: "Saliente / Libre", code: "S", hours: 0.0, bg: "bg-slate-200", text: "text-slate-800", border: "border-slate-300" },
-  V: { label: "Vacaciones", code: "V", hours: 7.0, bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300" },
-  LD: { label: "Día LD", code: "LD", hours: 7.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
-  DCI: { label: "Día DCI", code: "DCI", hours: -7.0, bg: "bg-cyan-100", text: "text-cyan-900", border: "border-cyan-400" },
+  V: { label: "Vacaciones", code: "V", hours: 0.0, bg: "bg-emerald-100", text: "text-emerald-900", border: "border-emerald-300" },
+  DCI: { label: "Día DCI", code: "DCI", hours: 0.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
+  LD: { label: "Día DCI", code: "DCI", hours: 0.0, bg: "bg-purple-100", text: "text-purple-900", border: "border-purple-300" },
+  DAJ: { label: "Ajuste Jornada (DAJ)", code: "DAJ", hours: 0.0, bg: "bg-cyan-100", text: "text-cyan-900", border: "border-cyan-400" },
   G: { label: "Guardia", code: "G", hours: 0.0, bg: "bg-fuchsia-100", text: "text-fuchsia-900", border: "border-fuchsia-300" }
 };
 
@@ -170,11 +171,15 @@ const BRUSH_CONFIG = {
     inactiveClasses: ["bg-emerald-50", "text-emerald-800", "border-emerald-200", "hover:bg-emerald-100"],
     activeClasses: ["bg-emerald-200", "text-emerald-950", "border-emerald-500", "ring-2", "ring-emerald-500", "font-black", "shadow-xs"]
   },
+  DCI: {
+    inactiveClasses: ["bg-purple-50", "text-purple-800", "border-purple-200", "hover:bg-purple-100"],
+    activeClasses: ["bg-purple-200", "text-purple-950", "border-purple-500", "ring-2", "ring-purple-500", "font-black", "shadow-xs"]
+  },
   LD: {
     inactiveClasses: ["bg-purple-50", "text-purple-800", "border-purple-200", "hover:bg-purple-100"],
     activeClasses: ["bg-purple-200", "text-purple-950", "border-purple-500", "ring-2", "ring-purple-500", "font-black", "shadow-xs"]
   },
-  DCI: {
+  DAJ: {
     inactiveClasses: ["bg-cyan-50", "text-cyan-800", "border-cyan-200", "hover:bg-cyan-100"],
     activeClasses: ["bg-cyan-200", "text-cyan-950", "border-cyan-500", "ring-2", "ring-cyan-500", "font-black", "shadow-xs"]
   },
@@ -350,9 +355,8 @@ export function getShiftDescription(code) {
     const hT = parseFloat(AppState.config.hoursT) || 7.0;
     const hN = parseFloat(AppState.config.hoursN) || 10.0;
     hoursText = ` (+${(hT + hN).toFixed(0)}h)`;
-  } else if (st.code === "DCI") {
-    const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
-    hoursText = ` (-${hDCI.toFixed(0)}h)`;
+  } else if (st.code === "V" || st.code === "DCI" || st.code === "DAJ" || st.code === "S") {
+    hoursText = " (0h)";
   } else if (st.hours) {
     hoursText = ` (${st.hours > 0 ? '+' : ''}${st.hours}h)`;
   }
@@ -497,7 +501,7 @@ export function syncCalendarMonthToTable(month) {
   }
 
   const daysInMonth = getDaysInMonth(year, month);
-  let mCount = 0, tCount = 0, nCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let mCount = 0, tCount = 0, nCount = 0, vCount = 0, dciCount = 0, dajCount = 0, gCount = 0;
   let customH = 0;
 
   for (let day = 1; day <= daysInMonth; day++) {
@@ -512,8 +516,8 @@ export function syncCalendarMonthToTable(month) {
     else if (shift === "MT") { mCount++; tCount++; }
     else if (shift === "TN") { tCount++; nCount++; }
     else if (shift === "V") vCount++;
-    else if (shift === "LD") ldCount++;
-    else if (shift === "DCI") dciCount++;
+    else if (shift === "DCI" || shift === "LD") dciCount++;
+    else if (shift === "DAJ") dajCount++;
     else if (shift === "G") gCount += 17;
     else if (typeof shift === "string" && shift.startsWith("P")) {
       const parts = shift.split(":");
@@ -527,8 +531,9 @@ export function syncCalendarMonthToTable(month) {
   row.tardes = tCount;
   row.noches = nCount;
   row.vacaciones = vCount;
-  row.moscosos = ldCount;
-  row.dciHoras = dciCount * (parseFloat(AppState.config.hoursDCI) || 7.0);
+  row.moscosos = dciCount; // Días DCI (Libre disposición)
+  row.dajCount = dajCount; // Días DAJ (Ajuste)
+  row.dciHoras = 0; // En base neta DAJ computa 0h y no resta
   row.guardias = gCount;
   row.horasEspeciales = parseFloat(customH.toFixed(1));
   row.isManual = false;
@@ -548,8 +553,8 @@ export function syncTableMonthToCalendar(month) {
     }
   }
 
-  const dciDays = Math.round((row.dciHoras || 0) / (parseFloat(AppState.config.hoursDCI) || 7.0));
-  const totalItems = (row.mananas || 0) + (row.tardes || 0) + (row.noches || 0) + (row.vacaciones || 0) + (row.moscosos || 0) + dciDays;
+  const dajDays = row.dajCount || Math.round((row.dciHoras || 0) / (parseFloat(AppState.config.hoursDCI) || 7.0));
+  const totalItems = (row.mananas || 0) + (row.tardes || 0) + (row.noches || 0) + (row.vacaciones || 0) + (row.moscosos || 0) + dajDays;
   if (totalItems === 0) return;
 
   // 2. Obtener lista de días del mes dentro del contrato
@@ -573,23 +578,23 @@ export function syncTableMonthToCalendar(month) {
     }
   }
 
-  // B) Moscosos (LD) - En régimen diurno solo días laborables
-  let ldAssigned = 0;
-  for (let i = 0; i < activeDays.length && ldAssigned < row.moscosos; i++) {
-    if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
-    if (!AppState.calendarShifts[activeDays[i].dateStr]) {
-      AppState.calendarShifts[activeDays[i].dateStr] = "LD";
-      ldAssigned++;
-    }
-  }
-
-  // C) Días DCI - En régimen diurno solo días laborables
+  // B) Días DCI (Libre disposición) - En régimen diurno solo días laborables
   let dciAssigned = 0;
-  for (let i = 0; i < activeDays.length && dciAssigned < dciDays; i++) {
+  for (let i = 0; i < activeDays.length && dciAssigned < row.moscosos; i++) {
     if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
     if (!AppState.calendarShifts[activeDays[i].dateStr]) {
       AppState.calendarShifts[activeDays[i].dateStr] = "DCI";
       dciAssigned++;
+    }
+  }
+
+  // C) Días DAJ (Ajuste por exceso) - En régimen diurno solo días laborables
+  let dajAssigned = 0;
+  for (let i = 0; i < activeDays.length && dajAssigned < dajDays; i++) {
+    if (AppState.config.regime === "diurno" && activeDays[i].isWeekend) continue;
+    if (!AppState.calendarShifts[activeDays[i].dateStr]) {
+      AppState.calendarShifts[activeDays[i].dateStr] = "DAJ";
+      dajAssigned++;
     }
   }
 
@@ -636,13 +641,14 @@ export function ensureTwoWaySync() {
       row.noches = 0;
       row.vacaciones = 0;
       row.moscosos = 0;
+      row.dajCount = 0;
       row.dciHoras = 0;
       row.guardias = 0;
       row.isManual = false;
       continue;
     }
     const daysInMonth = getDaysInMonth(year, m);
-    let mCount = 0, tCount = 0, nCount = 0, vCount = 0, ldCount = 0, dciCount = 0;
+    let mCount = 0, tCount = 0, nCount = 0, vCount = 0, dciCount = 0, dajCount = 0;
     
     for (let d = 1; d <= daysInMonth; d++) {
       const dateStr = formatISODate(year, m, d);
@@ -655,15 +661,16 @@ export function ensureTwoWaySync() {
       else if (shift === "MT") { mCount++; tCount++; }
       else if (shift === "TN") { tCount++; nCount++; }
       else if (shift === "V") vCount++;
-      else if (shift === "LD") ldCount++;
-      else if (shift === "DCI") dciCount++;
+      else if (shift === "DCI" || shift === "LD") dciCount++;
+      else if (shift === "DAJ") dajCount++;
       else if (typeof shift === "string" && shift.startsWith("P")) { mCount++; }
     }
 
+    const dajDays = row.dajCount || Math.round((row.dciHoras || 0) / 7);
     const tableTotal = (row.mananas || 0) + (row.tardes || 0) + (row.noches || 0) + 
-                       (row.vacaciones || 0) + (row.moscosos || 0) + Math.round((row.dciHoras || 0) / 7) +
+                       (row.vacaciones || 0) + (row.moscosos || 0) + dajDays +
                        ((row.horasEspeciales || 0) > 0 ? 1 : 0);
-    const calTotal = mCount + tCount + nCount + vCount + ldCount + dciCount;
+    const calTotal = mCount + tCount + nCount + vCount + dciCount + dajCount;
 
     // Si la tabla tiene datos pero el calendario está vacío o incompleto
     if (tableTotal > 0 && calTotal === 0) {
@@ -684,16 +691,13 @@ export function getMonthActualHours(month) {
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
-  const hV = parseFloat(AppState.config.hoursV) || 7.0;
-  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
 
+  // En base neta (normativa SAS / Gerhonte), las vacaciones [V], días DCI [DCI] y ajustes [DAJ]
+  // computan a 0 horas trabajadas adicionales (la jornada base ya descuenta los descansos estatutarios).
   const effective = (row.mananas * hM) +
                     (row.tardes * hT) +
                     (row.noches * hN) +
-                    (row.vacaciones * hV) +
-                    (row.moscosos * hLD) +
-                    (row.horasEspeciales || 0) -
-                    (row.dciHoras);
+                    (row.horasEspeciales || 0);
   
   return parseFloat(effective.toFixed(1));
 }
@@ -938,39 +942,39 @@ export function getAccumulatedMetrics() {
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
-  const hV = parseFloat(AppState.config.hoursV) || 7.0;
-  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
   const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
 
-  // 1. Bolsas Estatutarias de Vacaciones y Asuntos Propios (LD) según Nombramiento
-  // Por defecto en SAS: 22 días laborables de vacaciones y 6 días de LD al año.
-  // Proporcional a días de contrato con redondeo SAS:
-  // - Vacaciones a fracciones de 0,5 al alza (Math.ceil(val * 2) / 2)
-  // - Días LD proporcionales (regla SAS de 1 día por cada dos meses o redondeo proporcional estándar):
+  // 1. Bolsas Estatutarias de Vacaciones y Días DCI (Libre Disposición) según Nombramiento
+  // En SAS: 22 días laborables de vacaciones y 6 días de DCI (1 día cada 2 meses) por año natural.
+  // Proporcional estrictamente entre fecha_inicio y fecha_fin del nombramiento activo dentro del año:
   const annualBaseVac = parseFloat(AppState.config.annualVacationDays) || 22.0;
-  const annualBaseLd = parseFloat(AppState.config.annualLdDays) || 6.0;
+  const annualBaseDci = parseFloat(AppState.config.annualLdDays || AppState.config.annualDciDays) || 6.0;
 
-  let totalVacationDays = annualBaseVac;
-  let totalLdDays = annualBaseLd;
-  if (contractDays < yearDays && yearDays > 0) {
+  let totalVacationDays = 0;
+  let totalDciDays = 0;
+  if (contractDays === 0) {
+    totalVacationDays = 0;
+    totalDciDays = 0;
+  } else if (contractDays < yearDays && yearDays > 0) {
     totalVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
-    totalLdDays = Math.min(annualBaseLd, Math.round((annualBaseLd * contractDays) / yearDays));
+    totalDciDays = Math.min(annualBaseDci, Math.round((annualBaseDci * contractDays) / yearDays));
+  } else {
+    totalVacationDays = annualBaseVac;
+    totalDciDays = annualBaseDci;
   }
 
   let totalActiveDaysInYear = 0;
   let totalWorkedAllYear = 0;
   let totalPresentialHours = 0;
-  let totalPermitHours = 0;
-  let totalDciConsumedHours = 0;
   let totalVacationConsumedDays = 0;
-  let totalLdConsumedDays = 0;
+  let totalDciConsumedDays = 0;
+  let totalDajConsumedDays = 0;
 
   let filledMonthsCount = 0;
   let lastFilledMonth = -1;
   let workedInFilledMonths = 0;
   let requiredInFilledMonths = 0;
   let presentialInFilledMonths = 0;
-  let permitsInFilledMonths = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
@@ -980,23 +984,23 @@ export function getAccumulatedMetrics() {
     const tCount = row.tardes || 0;
     const nCount = row.noches || 0;
     const vCount = row.vacaciones || 0;
-    const ldCount = row.moscosos || 0;
-    const dciH = row.dciHoras || 0;
+    const dciCount = row.moscosos || 0;
+    const dajCount = row.dajCount || 0;
 
+    // Cómputo base neta: Las horas presenciales son las horas trabajadas.
+    // Vacaciones (V), DCI y DAJ computan a 0 horas trabajadas adicionales en jornada neta.
     const presHours = (mCount * hM) + (tCount * hT) + (nCount * hN) + (row.horasEspeciales || 0);
-    const permHours = (vCount * hV) + (ldCount * hLD);
-    const effHours = presHours + permHours - dciH;
+    const effHours = presHours;
 
     totalWorkedAllYear += effHours;
     totalPresentialHours += presHours;
-    totalPermitHours += permHours;
-    totalDciConsumedHours += dciH;
     totalVacationConsumedDays += vCount;
-    totalLdConsumedDays += ldCount;
+    totalDciConsumedDays += dciCount;
+    totalDajConsumedDays += dajCount;
 
     const hasShifts = (
       mCount > 0 || tCount > 0 || nCount > 0 ||
-      vCount > 0 || ldCount > 0 || dciH !== 0 || ((row.horasEspeciales || 0) > 0)
+      vCount > 0 || dciCount > 0 || dajCount > 0 || ((row.horasEspeciales || 0) > 0)
     );
 
     if (actDays > 0 && hasShifts) {
@@ -1005,7 +1009,6 @@ export function getAccumulatedMetrics() {
       workedInFilledMonths += effHours;
       requiredInFilledMonths += getMonthRequiredHours(year, m);
       presentialInFilledMonths += presHours;
-      permitsInFilledMonths += permHours;
     }
   });
 
@@ -1016,19 +1019,18 @@ export function getAccumulatedMetrics() {
     : 0.0;
   const accumulatedBalance = Math.abs(rawAccumulatedBalance) < 0.05 ? 0.0 : rawAccumulatedBalance;
 
-  // Bolsa DCI (Exceso Real):
-  // El exceso real consolidado coincide exactamente con el saldo neto acumulado positivo.
-  const dciNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
-  const dciDaysAvailable = Math.floor(dciNetHours / hDCI);
-  const dciRemainderHours = parseFloat((dciNetHours % hDCI).toFixed(1));
-  const dciExactDays = parseFloat((dciNetHours / hDCI).toFixed(1));
-  const totalDciConsumedDays = Math.round(totalDciConsumedHours / hDCI);
+  // Exceso de Jornada (DAJ):
+  // El exceso real consolidado coincide con el saldo neto positivo. Cada 7h genera 1 día DAJ.
+  const dajNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
+  const dajDaysAvailable = Math.floor(dajNetHours / 7.0);
+  const dajRemainderHours = parseFloat((dajNetHours % 7.0).toFixed(1));
+  const dajExactDays = parseFloat((dajNetHours / 7.0).toFixed(1));
 
   // Bolsa Vacaciones
   const remainingVacationDays = Math.max(0, parseFloat((totalVacationDays - totalVacationConsumedDays).toFixed(1)));
 
-  // Bolsa Asuntos Propios (LD)
-  const remainingLdDays = Math.max(0, Math.round(totalLdDays - totalLdConsumedDays));
+  // Días DCI (Libre Disposición)
+  const remainingDciDays = Math.max(0, Math.round(totalDciDays - totalDciConsumedDays));
 
   // Progreso real de horas sobre la jornada anual
   const progressPercent = totalContractReq > 0
@@ -1046,31 +1048,40 @@ export function getAccumulatedMetrics() {
     totalActiveDaysInYear,
     totalWorkedAllYear,
     totalPresentialHours,
-    totalPermitHours,
-    totalDciConsumedHours,
-    totalDciConsumedDays,
+    totalPermitHours: 0.0,
+    totalDajConsumedDays,
+    totalDciConsumedHours: totalDajConsumedDays * 7.0, // compat
+    totalDciConsumedDays, // días DCI
     filledMonthsCount,
     lastFilledMonth,
     lastFilledMonthName: lastFilledMonth >= 0 ? MONTH_NAMES[lastFilledMonth] : null,
     workedInFilledMonths,
     requiredInFilledMonths,
     presentialInFilledMonths,
-    permitsInFilledMonths,
+    permitsInFilledMonths: 0.0,
     accumulatedBalance,
-    // Bolsa DCI (Exceso Real)
-    dciNetHours,
-    dciDaysAvailable,
-    dciDays: dciDaysAvailable, // Alias para compatibilidad con Tab 3 y Tab 4
-    dciRemainderHours,
-    dciExactDays,
+    // Exceso de Jornada (DAJ)
+    dajNetHours,
+    dajDaysAvailable,
+    dajRemainderHours,
+    dajExactDays,
+    // Compatibilidad hacia atrás
+    dciNetHours: dajNetHours,
+    dciDaysAvailable: dajDaysAvailable,
+    dciDays: dajDaysAvailable,
+    dciRemainderHours: dajRemainderHours,
+    dciExactDays: dajExactDays,
     // Bolsa Vacaciones
     totalVacationDays,
     totalVacationConsumedDays,
     remainingVacationDays,
-    // Bolsa LD
-    totalLdDays,
-    totalLdConsumedDays,
-    remainingLdDays,
+    // Días DCI (Libre Disposición)
+    totalDciDays,
+    remainingDciDays,
+    // Compatibilidad con claves anteriores
+    totalLdDays: totalDciDays,
+    totalLdConsumedDays: totalDciConsumedDays,
+    remainingLdDays: remainingDciDays,
     // Progreso
     progressPercent,
     remainingHoursAnnual,
@@ -1082,7 +1093,7 @@ function renderKpis() {
   const metrics = getAccumulatedMetrics();
 
   // -------------------------------------------------------------
-  // TARJETA 1: Bolsa DCI (Exceso Real)
+  // TARJETA 1: Exceso Jornada (DAJ)
   // -------------------------------------------------------------
   const dciHoursEl = document.getElementById("kpi-dci-hours");
   const dciDaysEl = document.getElementById("kpi-dci-days");
@@ -1095,9 +1106,9 @@ function renderKpis() {
   }
 
   if (dciHoursEl) {
-    if (metrics.dciDaysAvailable > 0) {
-      const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
-      dciHoursEl.textContent = `+${metrics.dciDaysAvailable} ${dayWord}`;
+    if (metrics.dajDaysAvailable > 0) {
+      const dayWord = metrics.dajDaysAvailable === 1 ? "Día" : "Días";
+      dciHoursEl.textContent = `+${metrics.dajDaysAvailable} ${dayWord}`;
       dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block";
     } else if (metrics.accumulatedBalance < 0) {
       dciHoursEl.textContent = `${metrics.accumulatedBalance.toFixed(1)} h`;
@@ -1108,12 +1119,12 @@ function renderKpis() {
     }
   }
   if (dciDaysEl) {
-    const dayWord = metrics.dciDaysAvailable === 1 ? "Día" : "Días";
-    dciDaysEl.textContent = `${metrics.dciDaysAvailable} ${dayWord}`;
+    const dayWord = metrics.dajDaysAvailable === 1 ? "Día" : "Días";
+    dciDaysEl.textContent = `${metrics.dajDaysAvailable} ${dayWord}`;
   }
   if (dciLabelEl) {
-    if (metrics.dciNetHours > 0) {
-      dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">+${metrics.dciNetHours.toFixed(1)} h netas</span> (+${metrics.dciRemainderHours}h remanente)`;
+    if (metrics.dajNetHours > 0) {
+      dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">+${metrics.dajNetHours.toFixed(1)} h netas</span> (+${metrics.dajRemainderHours}h remanente)`;
     } else if (metrics.accumulatedBalance < 0) {
       dciLabelEl.innerHTML = `<span class="font-bold text-rose-700">Déficit acumulado de jornada ordinaria</span>`;
     } else {
@@ -1121,7 +1132,7 @@ function renderKpis() {
     }
   }
   if (dciSubEl) {
-    dciSubEl.textContent = `${metrics.totalDciConsumedDays} d DCI disfrutados en cuadrante (${metrics.totalDciConsumedHours.toFixed(1)}h)`;
+    dciSubEl.textContent = `${metrics.totalDajConsumedDays} d DAJ disfrutados en cuadrante`;
   }
 
   // -------------------------------------------------------------
@@ -1147,7 +1158,7 @@ function renderKpis() {
   }
 
   // -------------------------------------------------------------
-  // TARJETA 3: Días de Libre Disposición (LD)
+  // TARJETA 3: Días DCI (Libre Disposición)
   // -------------------------------------------------------------
   const ldValueEl = document.getElementById("kpi-ld-value");
   const ldLabelEl = document.getElementById("kpi-ld-label");
@@ -1159,10 +1170,13 @@ function renderKpis() {
   }
 
   if (ldValueEl) {
-    ldValueEl.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días`;
+    ldValueEl.textContent = `${metrics.remainingDciDays} / ${metrics.totalDciDays} días`;
   }
   if (ldLabelEl) {
     ldLabelEl.textContent = "";
+  }
+  if (ldSubEl) {
+    ldSubEl.textContent = "";
   }
   if (ldSubEl) {
     ldSubEl.textContent = "";
@@ -1226,8 +1240,8 @@ function renderCalendar() {
       else if (shiftCode === "TN") { tnCount++; tCount++; nCount++; }
       else if (shiftCode === "P" && customData) { customHoursMonth += customData.hours; }
       else if (shiftCode === "V") vCount++;
-      else if (shiftCode === "LD") ldCount++;
-      else if (shiftCode === "DCI") dciCount++;
+      else if (shiftCode === "DCI" || shiftCode === "LD") dciCount++;
+      else if (shiftCode === "DAJ") dajCount++;
       else if (shiftCode === "G") gCount++;
     }
 
@@ -1272,9 +1286,8 @@ function renderCalendar() {
         hoursLabel = `+${(hT + hN).toFixed(0)}h`;
       } else if (st.code === "P" && customData) {
         hoursLabel = `+${customData.hours}h`;
-      } else if (st.code === "DCI") {
-        const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
-        hoursLabel = `-${hDCI}h`;
+      } else if (st.code === "V" || st.code === "DCI" || st.code === "DAJ" || st.code === "S") {
+        hoursLabel = "0h";
       } else if (st.code === "G") {
         hoursLabel = "Guardia";
       }
@@ -1370,12 +1383,12 @@ function applyBrushToDate(dateStr) {
       showToast("En régimen diurno (L-V), los sábados y domingos no son laborables. Las vacaciones no pueden registrarse en fines de semana.", "warning");
       return;
     }
-    if (AppState.activeBrush === "LD") {
-      showToast("En régimen diurno (L-V), los días de asuntos propios (LD) deben disfrutarse en días laborables ordinarios.", "warning");
+    if (AppState.activeBrush === "DCI" || AppState.activeBrush === "LD") {
+      showToast("En régimen diurno (L-V), los días de carácter individual (DCI) deben disfrutarse en días laborables ordinarios.", "warning");
       return;
     }
-    if (AppState.activeBrush === "DCI") {
-      showToast("En régimen diurno (L-V), los descansos DCI deben aplicarse en jornadas laborales ordinarias.", "warning");
+    if (AppState.activeBrush === "DAJ") {
+      showToast("En régimen diurno (L-V), los días de ajuste de jornada (DAJ) deben aplicarse en jornadas laborales ordinarias.", "warning");
       return;
     }
   }
@@ -1511,7 +1524,7 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-bold text-emerald-900">${row.vacaciones || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-purple-900">${row.moscosos || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-black text-emerald-950 bg-emerald-50/60 cell-permisos">-</td>
-        <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dciHoras ? (row.dciHoras + 'h') : '0h'}</td>
+        <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dajCount || 0} d</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-actual">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
         <td class="py-2.5 px-3 text-center font-mono text-slate-400 cell-accum font-black">-</td>
@@ -1539,8 +1552,6 @@ function updateTableComputedCells() {
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
-  const hV = parseFloat(AppState.config.hoursV) || 7.0;
-  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
 
   let totActiveDays = 0;
   let totReqHours = 0;
@@ -1550,8 +1561,7 @@ function updateTableComputedCells() {
   let totPresentialHours = 0;
   let totVacaciones = 0;
   let totMoscosos = 0;
-  let totPermitHours = 0;
-  let totDciHoras = 0;
+  let totDajCount = 0;
   let totActualHours = 0;
   let runningAccumBalance = 0;
 
@@ -1565,6 +1575,7 @@ function updateTableComputedCells() {
       row.noches = 0;
       row.vacaciones = 0;
       row.moscosos = 0;
+      row.dajCount = 0;
       row.dciHoras = 0;
       row.guardias = 0;
       row.isManual = false;
@@ -1597,7 +1608,7 @@ function updateTableComputedCells() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0) ||
+      ((row.dajCount || 0) > 0) ||
       ((row.horasEspeciales || 0) > 0)
     );
 
@@ -1629,9 +1640,8 @@ function updateTableComputedCells() {
     }
 
     const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-    const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
-    const dciH = row.dciHoras || 0;
-    const actHours = presHours + permHours - dciH;
+    const permHours = 0.0; // Base neta: Vacaciones y DCI no computan horas trabajadas
+    const actHours = presHours; // Horas efectivas trabajadas
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
     totActiveDays += activeDays;
@@ -1642,8 +1652,7 @@ function updateTableComputedCells() {
     totPresentialHours += presHours;
     totVacaciones += row.vacaciones;
     totMoscosos += row.moscosos;
-    totPermitHours += permHours;
-    totDciHoras += dciH;
+    totDajCount += (row.dajCount || 0);
     totActualHours += actHours;
     runningAccumBalance += monthBal;
 
@@ -1659,7 +1668,7 @@ function updateTableComputedCells() {
 
       const cellPerm = tr.querySelector(".cell-permisos");
       if (cellPerm) {
-        cellPerm.textContent = permHours.toFixed(1);
+        cellPerm.textContent = "0.0";
         cellPerm.className = "py-2.5 px-2 text-center font-mono font-bold text-emerald-950 bg-emerald-50/70 cell-permisos";
       }
 
@@ -1697,8 +1706,8 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-black text-amber-950 bg-amber-100/80">${totPresentialHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-emerald-900">${totVacaciones}</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-purple-900">${totMoscosos}</td>
-      <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">${totPermitHours.toFixed(1)} h</td>
-      <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDciHoras} h</td>
+      <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">0.0 h</td>
+      <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDajCount} d</td>
       <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center text-slate-400">-</td>
       <td class="py-3 px-3 font-mono text-center text-slate-400">-</td>
@@ -1708,14 +1717,14 @@ function updateTableComputedCells() {
 
 function renderRequestLetter() {
   const select = document.getElementById("req-type-select");
-  const type = select ? select.value : (AppState.requestType || "dci");
+  const type = select ? select.value : (AppState.requestType || "daj");
   AppState.requestType = type;
 
   const metrics = getAccumulatedMetrics();
   const accumulatedBalance = metrics.accumulatedBalance;
   const dciHours = parseFloat(AppState.config.hoursDCI) || 7.0;
-  const dciDays = metrics.dciDaysAvailable;
-  const remainderHours = metrics.dciRemainderHours;
+  const dajDays = metrics.dajDaysAvailable;
+  const remainderHours = metrics.dajRemainderHours;
   const auditedNote = metrics.lastFilledMonthName ? ` (auditado a fecha de ${metrics.lastFilledMonthName})` : "";
 
   const workerName = AppState.config.workerName || "PERSONAL ESTATUTARIO";
@@ -1737,26 +1746,27 @@ function renderRequestLetter() {
 
   if (!AppState.proposedDatesByType) {
     AppState.proposedDatesByType = {
-      dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+      daj: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+      dci: "Día 15 de Mayo",
       moscosos: "Día 15 de Mayo",
       vacaciones: "Del 1 al 15 de Agosto"
     };
   }
 
   // Actualizar UI de controles
-  if (type === "dci") {
-    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Disfrute de DCI";
+  if (type === "daj") {
+    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Disfrute de DAJ";
     if (datesInput) datesInput.placeholder = "Ej: Días 14, 15 y 16 de Diciembre";
     if (badge) {
-      const dWord = dciDays === 1 ? "día" : "días";
-      badge.textContent = `${dciDays} ${dWord} DCI disp. (${metrics.dciNetHours > 0 ? '+' : ''}${metrics.dciNetHours.toFixed(1)}h)`;
+      const dWord = dajDays === 1 ? "día" : "días";
+      badge.textContent = `${dajDays} ${dWord} DAJ disp. (${metrics.dajNetHours > 0 ? '+' : ''}${metrics.dajNetHours.toFixed(1)}h)`;
       badge.className = "text-[11px] text-cyan-800 font-semibold bg-cyan-50 px-2 py-0.5 rounded border border-cyan-200";
     }
-  } else if (type === "moscosos") {
-    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Días LD";
+  } else if (type === "dci" || type === "moscosos") {
+    if (datesLabel) datesLabel.textContent = "Fechas Propuestas para Días DCI";
     if (datesInput) datesInput.placeholder = "Ej: Días 15 y 16 de Mayo";
     if (badge) {
-      badge.textContent = `${metrics.remainingLdDays} / ${metrics.totalLdDays} días disponibles`;
+      badge.textContent = `${metrics.remainingDciDays} / ${metrics.totalDciDays} días disponibles`;
       badge.className = "text-[11px] text-purple-800 font-semibold bg-purple-50 px-2 py-0.5 rounded border border-purple-200";
     }
   } else if (type === "vacaciones") {
@@ -1776,12 +1786,12 @@ function renderRequestLetter() {
 
   let letter = "";
 
-  if (type === "dci") {
+  if (type === "daj") {
     letter = `A LA DIRECCIÓN GERENCIA / DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
 CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
 UNIDAD / SERVICIO: ${service.toUpperCase()}
 
-ASUNTO: SOLICITUD REGLAMENTARIA DE DESCANSO COMPENSATORIO POR EXCESO DE JORNADA (DCI)
+ASUNTO: SOLICITUD REGLAMENTARIA DE DÍAS DE AJUSTE DE JORNADA POR EXCESO (DAJ)
 
 D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
@@ -1791,13 +1801,13 @@ PRIMERO.- Que de conformidad con el Acuerdo de la Mesa Sectorial de Sanidad del 
 
 SEGUNDO.- Que según la auditoría de cuadrante y registro de turnos efectivamente realizados hasta la fecha${auditedNote}, se acredita un SALDO A FAVOR acumulado de ${accumulatedBalance > 0 ? '+' : ''}${accumulatedBalance.toFixed(1)} HORAS netas de trabajo efectivo por encima de la jornada debida.
 
-TERCERO.- Que dicho exceso horario equivale a ${dciDays} JORNADA(S) COMPLETA(S) de descanso reglamentario (calculado a razón de ${dciHours.toFixed(1)} horas ordinarias por turno), restando un remanente en bolsa de ${remainderHours.toFixed(1)} horas.
+TERCERO.- Que dicho exceso horario equivale a ${dajDays} DÍA(S) DE AJUSTE DE JORNADA (DAJ) de descanso reglamentario (calculado a razón de ${dciHours.toFixed(1)} horas ordinarias por turno), restando un remanente en bolsa de ${remainderHours.toFixed(1)} horas.
 
 CUARTO.- Que dada la vigencia del nombramiento y con el fin de evitar discrepancias administrativas o la pérdida sobrevenida del derecho a la compensación del exceso de jornada laboral prestada,
 
 SOLICITA:
 
-Que teniendo por presentado este escrito en tiempo y forma, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de ${dciDays} DÍA(S) DE DESCANSO COMPENSATORIO POR EXCESO (DCI), proponiendo como fechas para su disfrute:
+Que teniendo por presentado este escrito en tiempo y forma, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de ${dajDays} DÍA(S) DE AJUSTE DE JORNADA POR EXCESO (DAJ), proponiendo como fechas para su disfrute:
 
    >>> ${proposedDates.toUpperCase()} <<<
 
@@ -1819,26 +1829,26 @@ DILIGENCIA DE CONFORMIDAD ASISTENCIAL / VISTO BUENO:
 
 Fdo. Responsable de Unidad / Supervisión:               Fecha: _____ / _____ / 2026`;
 
-  } else if (type === "moscosos") {
+  } else if (type === "dci" || type === "moscosos") {
     letter = `A LA DIRECCIÓN GERENCIA / DIRECCIÓN DE PERSONAL / SUPERVISIÓN DE ÁREA
 CENTRO HOSPITALARIO / DISTRITO: ${center.toUpperCase()}
 UNIDAD / SERVICIO: ${service.toUpperCase()}
 
-ASUNTO: SOLICITUD DE DÍAS DE LIBRE DISPOSICIÓN (LD / ASUNTOS PARTICULARES)
+ASUNTO: SOLICITUD DE DÍAS DE CARÁCTER INDIVIDUAL (DCI / LIBRE DISPOSICIÓN)
 
 D./Dña. ${workerName}, con D.N.I. nº ${workerDni}, en calidad de personal estatutario con nombramiento en la categoría de ${category}, adscrito/a al Servicio de ${service} de este centro hospitalario, ${periodText},
 
 EXPONE:
 
-PRIMERO.- Que al amparo del artículo 48.k del Real Decreto Legislativo 5/2015 (Texto Refundido de la Ley del Estatuto Básico del Empleado Público - TREBEP), la Ley 55/2003 (Estatuto Marco del Personal Estatutario de los Servicios de Salud) y el Manual de Vacaciones, Permisos y Licencias del Personal de Centros e Instituciones Sanitarias del Servicio Andaluz de Salud (SAS), el personal estatutario tiene derecho al disfrute de días de permiso retribuido por asuntos particulares a lo largo del año natural.
+PRIMERO.- Que al amparo del artículo 48.k del Real Decreto Legislativo 5/2015 (Texto Refundido de la Ley del Estatuto Básico del Empleado Público - TREBEP), la Ley 55/2003 (Estatuto Marco del Personal Estatutario de los Servicios de Salud) y el Manual de Vacaciones, Permisos y Licencias del Personal de Centros e Instituciones Sanitarias del Servicio Andaluz de Salud (SAS), el personal estatutario tiene derecho al disfrute de días de permiso retribuido por asuntos particulares (Días de Carácter Individual - DCI) a lo largo del año natural.
 
-SEGUNDO.- Que para el presente periodo en atención a las fechas de nombramiento, me corresponde un cupo de ${metrics.totalLdDays} DÍAS reconocidos de libre disposición, constando a la fecha un cómputo disfrutado de ${metrics.totalLdConsumedDays} día(s) en cuadrante y acreditando un SALDO DISPONIBLE de ${metrics.remainingLdDays} DÍA(S) pendientes de disfrute.
+SEGUNDO.- Que para el presente periodo en atención a las fechas de nombramiento, me corresponde un cupo de ${metrics.totalDciDays} DÍAS reconocidos de carácter individual (DCI), constando a la fecha un cómputo disfrutado de ${metrics.totalDciConsumedDays} día(s) en cuadrante y acreditando un SALDO DISPONIBLE de ${metrics.remainingDciDays} DÍA(S) pendientes de disfrute.
 
 TERCERO.- Que reuniendo los requisitos exigibles y con antelación suficiente para no interferir en la adecuada organización asistencial del servicio,
 
 SOLICITA:
 
-Que teniendo por presentado este escrito, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de DÍA(S) DE LIBRE DISPOSICIÓN (LD / ASUNTOS PARTICULARES), proponiendo como fechas para su disfrute:
+Que teniendo por presentado este escrito, se sirva admitirlo y acuerde la concesión y autorización para el disfrute de DÍA(S) DE CARÁCTER INDIVIDUAL (DCI / LIBRE DISPOSICIÓN), proponiendo como fechas para su disfrute:
 
    >>> ${proposedDates.toUpperCase()} <<<
 
@@ -1926,8 +1936,8 @@ export function syncConfigInputsFromState() {
   setVal("cfg-shift-v", AppState.config.hoursV);
   setVal("cfg-shift-ld", AppState.config.hoursLD);
   setVal("cfg-shift-dci", AppState.config.hoursDCI);
-  setVal("req-type-select", AppState.requestType || "dci");
-  const activeType = AppState.requestType || "dci";
+  setVal("req-type-select", AppState.requestType || "daj");
+  const activeType = AppState.requestType || "daj";
   const defaultDates = (AppState.proposedDatesByType && AppState.proposedDatesByType[activeType]) || AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre";
   setVal("req-proposed-dates", defaultDates);
 
@@ -2099,7 +2109,7 @@ export function exportarPDF() {
 
   doc.setFontSize(13);
   doc.setTextColor(15, 23, 42); // slate-900
-  doc.text("INFORME DE AUDITORÍA DE JORNADA Y BOLSA DCI", margin, 24);
+  doc.text("INFORME DE AUDITORÍA DE JORNADA Y BOLSA DE HORAS", margin, 24);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(8.5);
@@ -2135,7 +2145,7 @@ export function exportarPDF() {
   const periodText = cfg.endDate
     ? `${cfg.startDate || "Inicio año"} al ${cfg.endDate}`
     : (cfg.startDate ? `Desde ${cfg.startDate} (Indefinido / Plaza fija)` : `Año completo ${year}`);
-  const baseHoursText = `${cfg.baseHours || 1540} h anuales · Módulo DCI: ${cfg.hoursDCI || 7} h/día`;
+  const baseHoursText = `${cfg.baseHours || 1540} h anuales (base neta) · Módulo: ${cfg.hoursDCI || 7} h/día`;
 
   // Fila 1
   doc.setFont("helvetica", "bold");
@@ -2189,23 +2199,23 @@ export function exportarPDF() {
   const cardGap = 4;
   const cardW = (contentWidth - (cardGap * 2)) / 3;
 
-  const dciVal = metrics.dciDaysAvailable > 0
-    ? `+${metrics.dciDaysAvailable} DÍAS`
+  const dajVal = metrics.dajDaysAvailable > 0
+    ? `+${metrics.dajDaysAvailable} DÍAS`
     : (metrics.accumulatedBalance < 0 ? `${metrics.accumulatedBalance.toFixed(1)} h` : "0 DÍAS");
-  const dciSub = metrics.dciNetHours > 0
-    ? `+${metrics.dciNetHours.toFixed(1)} h netas (÷ 7h)`
+  const dajSub = metrics.dajNetHours > 0
+    ? `+${metrics.dajNetHours.toFixed(1)} h netas (÷ 7h)`
     : (metrics.accumulatedBalance < 0 ? "Déficit de jornada" : "Jornada al día");
-  const dciColor = metrics.accumulatedBalance < 0 ? [185, 28, 28] : [4, 120, 87];
-  const dciBg = metrics.accumulatedBalance < 0 ? [254, 242, 242] : [236, 253, 245];
+  const dajColor = metrics.accumulatedBalance < 0 ? [185, 28, 28] : [4, 120, 87];
+  const dajBg = metrics.accumulatedBalance < 0 ? [254, 242, 242] : [236, 253, 245];
 
   const cards = [
     {
-      label: "BOLSA DCI (EXCESO REAL)",
-      val: dciVal,
-      sub: dciSub,
-      sub2: `${metrics.totalDciConsumedDays} d DCI disfrutados`,
-      color: dciColor,
-      bg: dciBg
+      label: "EXCESO JORNADA (DAJ)",
+      val: dajVal,
+      sub: dajSub,
+      sub2: `${metrics.totalDajConsumedDays} d DAJ disfrutados`,
+      color: dajColor,
+      bg: dajBg
     },
     {
       label: "BOLSA VACACIONES",
@@ -2216,8 +2226,8 @@ export function exportarPDF() {
       bg: [248, 250, 252]
     },
     {
-      label: "DÍAS LD",
-      val: `${metrics.remainingLdDays} / ${metrics.totalLdDays} d`,
+      label: "DÍAS DCI",
+      val: `${metrics.remainingDciDays} / ${metrics.totalDciDays} d`,
       sub: "Días pendientes / Totales año",
       sub2: "",
       color: [88, 28, 135],
@@ -2255,8 +2265,6 @@ export function exportarPDF() {
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
-  const hV = parseFloat(AppState.config.hoursV) || 7.0;
-  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
 
   let totActiveDays = 0;
   let totReqHours = 0;
@@ -2267,7 +2275,7 @@ export function exportarPDF() {
   let totVacaciones = 0;
   let totMoscosos = 0;
   let totPermitHours = 0;
-  let totDciHoras = 0;
+  let totDajCount = 0;
   let totActualHours = 0;
   let runningAccum = 0;
 
@@ -2285,7 +2293,7 @@ export function exportarPDF() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0) ||
+      ((row.dajCount || 0) > 0) ||
       ((row.horasEspeciales || 0) > 0)
     );
 
@@ -2296,7 +2304,7 @@ export function exportarPDF() {
         `${reqHours.toFixed(1)} h`,
         "0", "0", "0", "0.0 h",
         "0", "0", "0.0 h",
-        "0 h",
+        "0 d",
         "0.0 h",
         "Pendiente",
         "-"
@@ -2304,9 +2312,8 @@ export function exportarPDF() {
     }
 
     const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-    const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
-    const dciH = row.dciHoras || 0;
-    const actHours = presHours + permHours - dciH;
+    const permHours = 0.0;
+    const actHours = presHours;
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
     totActiveDays += activeDays;
@@ -2318,7 +2325,7 @@ export function exportarPDF() {
     totVacaciones += (row.vacaciones || 0);
     totMoscosos += (row.moscosos || 0);
     totPermitHours += permHours;
-    totDciHoras += dciH;
+    totDajCount += (row.dajCount || 0);
     totActualHours += actHours;
     runningAccum += monthBal;
 
@@ -2336,7 +2343,7 @@ export function exportarPDF() {
       String(row.vacaciones || 0),
       String(row.moscosos || 0),
       `${permHours.toFixed(1)} h`,
-      dciH ? `${dciH} h` : "0 h",
+      `${row.dajCount || 0} d`,
       `${actHours.toFixed(1)} h`,
       `${signMonth}${monthBal.toFixed(1)} h`,
       `${signAccum}${runningAccum.toFixed(1)} h`
@@ -2354,7 +2361,7 @@ export function exportarPDF() {
     String(totVacaciones),
     String(totMoscosos),
     String(totPermitHours.toFixed(1)) + " h",
-    `${totDciHoras} h`,
+    `${totDajCount} d`,
     `${totActualHours.toFixed(1)} h`,
     "-",
     "-"
@@ -2363,7 +2370,7 @@ export function exportarPDF() {
   applyAutoTable(doc, {
     startY: 82,
     margin: { left: margin, right: margin },
-    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "LD", "Perm.", "DCI", "Efect.", "Saldo", "Acum."]],
+    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "DCI", "Perm.", "DAJ", "Efect.", "Saldo", "Acum."]],
     body: tableBody,
     foot: tableFoot,
     theme: "grid",
@@ -2444,7 +2451,7 @@ export function exportarPDF() {
     doc.setFontSize(6.5);
     doc.setTextColor(148, 163, 184);
     doc.text("Nota técnica: Cómputo realizado conforme a la Orden de Jornada y Horarios del SAS y tabla de ponderación horaria Gerhonte.", margin, legalY);
-    doc.text("Documento justificativo emitido automáticamente por GestorSAS para el control del saldo horario y días de compensación (DCI).", margin, legalY + 3.5);
+    doc.text("Documento justificativo emitido automáticamente por GestorSAS para el control del saldo horario y días de compensación.", margin, legalY + 3.5);
     doc.text("Página 1 de 1 · GestorSAS v2.0", pageWidth - margin, legalY + 3.5, { align: "right" });
   }
 
@@ -2459,14 +2466,11 @@ export function exportarCSV() {
   const hM = parseFloat(AppState.config.hoursM) || 7.0;
   const hT = parseFloat(AppState.config.hoursT) || 7.0;
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
-  const hV = parseFloat(AppState.config.hoursV) || 7.0;
-  const hLD = parseFloat(AppState.config.hoursLD) || 7.0;
 
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días LD;Horas Permisos;DCI Disfrutado (h);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días DCI;Horas Permisos;DAJ Disfrutado (d);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
 
   let runningAccum = 0;
-  let totVacaciones = 0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -2477,7 +2481,7 @@ export function exportarCSV() {
       (row.noches || 0) > 0 ||
       (row.vacaciones || 0) > 0 ||
       (row.moscosos || 0) > 0 ||
-      ((row.dciHoras || 0) !== 0) ||
+      ((row.dajCount || 0) > 0) ||
       ((row.horasEspeciales || 0) > 0)
     );
 
@@ -2487,13 +2491,12 @@ export function exportarCSV() {
       csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;Pendiente de rellenar\r\n`;
     } else {
       const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-      const permHours = ((row.vacaciones || 0) * hV) + ((row.moscosos || 0) * hLD);
-      const dciH = row.dciHoras || 0;
-      const actHours = presHours + permHours - dciH;
+      const permHours = 0.0;
+      const actHours = presHours;
       const monthBal = parseFloat((actHours - reqHours).toFixed(1));
       runningAccum += monthBal;
 
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas};${row.tardes};${row.noches};${presHours.toFixed(1)};${row.vacaciones};${row.moscosos};${permHours.toFixed(1)};${dciH};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};Auditado\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas || 0};${row.tardes || 0};${row.noches || 0};${presHours.toFixed(1)};${row.vacaciones || 0};${row.moscosos || 0};0.0;${row.dajCount || 0};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};Auditado\r\n`;
     }
   });
 
@@ -3393,7 +3396,8 @@ function initApp() {
       AppState.requestType = type;
       if (!AppState.proposedDatesByType) {
         AppState.proposedDatesByType = {
-          dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          daj: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          dci: "Día 15 de Mayo",
           moscosos: "Día 15 de Mayo",
           vacaciones: "Del 1 al 15 de Agosto"
         };
@@ -3410,16 +3414,17 @@ function initApp() {
   const reqDatesInput = document.getElementById("req-proposed-dates");
   if (reqDatesInput) {
     reqDatesInput.addEventListener("input", (e) => {
-      const type = AppState.requestType || "dci";
+      const type = AppState.requestType || "daj";
       if (!AppState.proposedDatesByType) {
         AppState.proposedDatesByType = {
-          dci: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          daj: AppState.config.proposedDates || "Días 14, 15 y 16 de Diciembre",
+          dci: "Día 15 de Mayo",
           moscosos: "Día 15 de Mayo",
           vacaciones: "Del 1 al 15 de Agosto"
         };
       }
       AppState.proposedDatesByType[type] = e.target.value;
-      if (type === "dci") {
+      if (type === "daj") {
         AppState.config.proposedDates = e.target.value;
       }
       renderRequestLetter();
@@ -3477,8 +3482,8 @@ function initApp() {
     else if (key === "3") selectBrush("TN");
     else if (key === "P") openCustomShiftModal();
     else if (key === "V") selectBrush("V");
-    else if (key === "L") selectBrush("LD");
-    else if (key === "D") selectBrush("DCI");
+    else if (key === "L" || key === "I") selectBrush("DCI");
+    else if (key === "D" || key === "A") selectBrush("DAJ");
     else if (key === "X" || key === "DELETE" || key === "BACKSPACE") selectBrush("CLEAR");
     else if (key === "ESCAPE") {
       clearActiveBrush();
