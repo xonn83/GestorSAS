@@ -95,6 +95,7 @@ export const AppState = {
   calendarMonth: currentMonth,
   activeBrush: null,
   calendarShifts: {},
+  holidaySaturdays: {},
   monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
     month: i,
     mananas: 0,
@@ -430,6 +431,63 @@ export function getMonthActiveContractDays(year, month) {
   return activeCount;
 }
 
+export function getActiveHolidaySaturdays(targetYear = AppState.calendarYear) {
+  const result = [];
+  const holidaySats = AppState.holidaySaturdays || {};
+  Object.keys(holidaySats).forEach(dateStr => {
+    if (!holidaySats[dateStr]) return;
+    if (!dateStr.startsWith(`${targetYear}-`)) return;
+    if (!isDateInsideContract(dateStr)) return;
+    const d = parseISODate(dateStr);
+    if (d.getDay() === 6) {
+      result.push(dateStr);
+    }
+  });
+  result.sort();
+  return result;
+}
+
+export function getDciExceptions(targetYear = AppState.calendarYear) {
+  // 1. Sábados festivos (tope legal del SAS: máx. 2 al año dentro del contrato)
+  const activeSaturdays = getActiveHolidaySaturdays(targetYear);
+  const cappedHolidaySaturdays = activeSaturdays.slice(0, 2);
+  const saturdayHolidayDays = cappedHolidaySaturdays.length;
+
+  // 2. Detección automática del 24 y 31 de diciembre en fin de semana (sábado o domingo)
+  let dec24Extra = false;
+  let dec31Extra = false;
+
+  const d24Str = `${targetYear}-12-24`;
+  if (isDateInsideContract(d24Str)) {
+    const d24 = parseISODate(d24Str);
+    const dayOfWeek = d24.getDay(); // 0 = Domingo, 6 = Sábado
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      dec24Extra = true;
+    }
+  }
+
+  const d31Str = `${targetYear}-12-31`;
+  if (isDateInsideContract(d31Str)) {
+    const d31 = parseISODate(d31Str);
+    const dayOfWeek = d31.getDay(); // 0 = Domingo, 6 = Sábado
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      dec31Extra = true;
+    }
+  }
+
+  const decWeekendDays = (dec24Extra ? 1 : 0) + (dec31Extra ? 1 : 0);
+  const totalExtraDays = saturdayHolidayDays + decWeekendDays;
+
+  return {
+    saturdayHolidayDays,
+    cappedHolidaySaturdays,
+    dec24Extra,
+    dec31Extra,
+    decWeekendDays,
+    totalExtraDays
+  };
+}
+
 export function getMonthPermissionDays(year, month) {
   const row = AppState.monthlyTableData ? AppState.monthlyTableData[month] : null;
   if (row && typeof row.vacaciones === "number" && typeof row.moscosos === "number") {
@@ -500,6 +558,14 @@ export function purgeShiftsOutsideContract() {
       purgedCount++;
     }
   });
+
+  if (AppState.holidaySaturdays) {
+    Object.keys(AppState.holidaySaturdays).forEach(dateStr => {
+      if (!isDateInsideContract(dateStr)) {
+        delete AppState.holidaySaturdays[dateStr];
+      }
+    });
+  }
 
   // Resincronizar cada mes para asegurar que los turnos purgados no sigan en la tabla
   const year = AppState.calendarYear;
@@ -796,6 +862,7 @@ export async function flushCloudSave() {
       hoursDCI: parseFloat(AppState.config.hoursDCI) || 7.0,
       proposedDates: AppState.config.proposedDates || "",
       calendarShifts: AppState.calendarShifts || {},
+      holidaySaturdays: AppState.holidaySaturdays || {},
       monthlyTableData: AppState.monthlyTableData,
       calendarYear: AppState.calendarYear,
       updatedAt: new Date().toISOString()
@@ -818,6 +885,7 @@ export function triggerSave(immediate = false) {
     localStorage.setItem(localKey, JSON.stringify({
       config: AppState.config,
       calendarShifts: AppState.calendarShifts,
+      holidaySaturdays: AppState.holidaySaturdays || {},
       monthlyTableData: AppState.monthlyTableData,
       calendarYear: AppState.calendarYear
     }));
@@ -901,6 +969,7 @@ export async function loadUserData(user) {
       if (cData.regime) AppState.config.regime = cData.regime;
       if (cData.baseHours) AppState.config.baseHours = cData.baseHours;
       if (cData.calendarShifts) AppState.calendarShifts = cData.calendarShifts;
+      if (cData.holidaySaturdays) AppState.holidaySaturdays = cData.holidaySaturdays;
       if (cData.monthlyTableData) AppState.monthlyTableData = cData.monthlyTableData;
       if (cData.calendarYear) AppState.calendarYear = cData.calendarYear;
       if (cData.proposedDates) AppState.config.proposedDates = cData.proposedDates;
@@ -993,18 +1062,23 @@ export function getAccumulatedMetrics() {
   const annualBaseVac = parseFloat(AppState.config.annualVacationDays) || 22.0;
   const annualBaseDci = parseFloat(AppState.config.annualLdDays || AppState.config.annualDciDays) || 6.0;
 
-  let totalVacationDays = 0;
-  let totalDciDays = 0;
+  let baseVacationDays = 0;
+  let baseDciDays = 0;
   if (contractDays === 0) {
-    totalVacationDays = 0;
-    totalDciDays = 0;
+    baseVacationDays = 0;
+    baseDciDays = 0;
   } else if (contractDays < yearDays && yearDays > 0) {
-    totalVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
-    totalDciDays = Math.min(annualBaseDci, Math.round((annualBaseDci * contractDays) / yearDays));
+    baseVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
+    baseDciDays = Math.min(annualBaseDci, Math.round((annualBaseDci * contractDays) / yearDays));
   } else {
-    totalVacationDays = annualBaseVac;
-    totalDciDays = annualBaseDci;
+    baseVacationDays = annualBaseVac;
+    baseDciDays = annualBaseDci;
   }
+
+  // Excepciones normativas SAS (Sábados festivos y 24/31 dic en fin de semana)
+  const dciExceptions = getDciExceptions(year);
+  const totalVacationDays = baseVacationDays;
+  const totalDciDays = baseDciDays + dciExceptions.totalExtraDays;
 
   let totalActiveDaysInYear = 0;
   let totalWorkedAllYear = 0;
@@ -1139,6 +1213,8 @@ export function getAccumulatedMetrics() {
     totalVacationConsumedDays,
     remainingVacationDays,
     // Días DCI (Libre Disposición)
+    baseDciDays,
+    dciExceptions,
     totalDciDays,
     remainingDciDays,
     // Compatibilidad con claves anteriores
@@ -1172,13 +1248,13 @@ function renderKpis() {
     if (metrics.dajDaysAvailable > 0) {
       const dayWord = metrics.dajDaysAvailable === 1 ? "Día" : "Días";
       dciHoursEl.textContent = `+${metrics.dajDaysAvailable} ${dayWord}`;
-      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-cyan-700 font-mono block";
+      dciHoursEl.className = "text-xl sm:text-2xl font-black tracking-tight text-cyan-700 block";
     } else if (metrics.accumulatedBalance < 0) {
       dciHoursEl.textContent = `${metrics.accumulatedBalance.toFixed(1)} h`;
-      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-rose-600 font-mono block";
+      dciHoursEl.className = "text-xl sm:text-2xl font-black tracking-tight text-rose-600 block";
     } else {
       dciHoursEl.textContent = "0 Días";
-      dciHoursEl.className = "text-xl sm:text-3xl font-black tracking-tight text-slate-700 font-mono block";
+      dciHoursEl.className = "text-xl sm:text-2xl font-black tracking-tight text-slate-700 block";
     }
   }
   if (dciDaysEl) {
@@ -1258,8 +1334,27 @@ function renderKpis() {
   const ldLabelEl = document.getElementById("kpi-ld-label");
   const ldBadgeEl = document.getElementById("kpi-ld-badge");
   const ldSubEl = document.getElementById("kpi-ld-sub");
+  const ldExtraEl = document.getElementById("kpi-ld-extra");
 
   const isDciExceeded = metrics.totalDciConsumedDays > metrics.totalDciDays;
+
+  // Desglose transparente de días DCI adicionales
+  if (ldExtraEl) {
+    if (metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) {
+      const parts = [`Base: ${metrics.baseDciDays}d`];
+      if (metrics.dciExceptions.saturdayHolidayDays > 0) {
+        parts.push(`+ ${metrics.dciExceptions.saturdayHolidayDays}d Sáb. festivo`);
+      }
+      if (metrics.dciExceptions.decWeekendDays > 0) {
+        parts.push(`+ ${metrics.dciExceptions.decWeekendDays}d 24/31 Dic.`);
+      }
+      ldExtraEl.textContent = parts.join(" ");
+      ldExtraEl.className = "text-[10px] font-bold text-purple-700 mt-0.5 block";
+    } else {
+      ldExtraEl.className = "hidden";
+      ldExtraEl.textContent = "";
+    }
+  }
 
   if (isDciExceeded) {
     if (cardDciEl) {
@@ -1366,7 +1461,11 @@ function renderCalendar() {
     }
 
     const cell = document.createElement("div");
-    const isWeekend = (new Date(year, month, day).getDay() === 0 || new Date(year, month, day).getDay() === 6);
+    const dayOfWeek = new Date(year, month, day).getDay();
+    const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
+    const isSaturday = (dayOfWeek === 6);
+    const isDec24 = (month === 11 && day === 24);
+    const isDec31 = (month === 11 && day === 31);
 
     let cellClass = "min-h-[50px] sm:min-h-[82px] p-1 sm:p-1.5 flex flex-col justify-between transition-colors relative group select-none rounded-lg border ";
     if (!inContract) {
@@ -1377,11 +1476,33 @@ function renderCalendar() {
     cell.className = cellClass;
     cell.dataset.date = dateStr;
 
-    let topHtml = `<div class="flex items-center justify-between">
+    let topHtml = `<div class="flex items-center justify-between gap-1">
       <span class="text-[11px] sm:text-xs font-bold ${isWeekend ? 'text-rose-600' : 'text-slate-700'}">${day}</span>`;
     
     if (!inContract) {
       topHtml += `<span class="text-[8px] sm:text-[9px] font-semibold text-slate-400 bg-slate-200/60 px-1 rounded hidden sm:inline">No contrat.</span>`;
+    } else {
+      // 1. Sábados festivos (solo en sábados dentro de contrato, excluyendo 24/31 dic que tienen su propia regla)
+      if (isSaturday && !isDec24 && !isDec31) {
+        const isSatHoliday = AppState.holidaySaturdays && !!AppState.holidaySaturdays[dateStr];
+        if (isSatHoliday) {
+          topHtml += `<button type="button" class="btn-sat-holiday inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black bg-amber-500 text-white shadow-2xs hover:bg-amber-600 transition-all cursor-pointer z-10" data-date="${dateStr}" title="Sábado Festivo compensable (+1 día DCI SAS). Toca para desmarcar.">★ Festivo</button>`;
+        } else {
+          topHtml += `<button type="button" class="btn-sat-holiday inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold text-slate-400 hover:text-amber-800 hover:bg-amber-100 border border-slate-200 sm:opacity-40 group-hover:opacity-100 transition-all cursor-pointer z-10" data-date="${dateStr}" title="Marcar este sábado como festivo compensable (+1 día DCI SAS, máx. 2/año)">☆ Festivo?</button>`;
+        }
+      } else if (isDec24) {
+        if (isWeekend) {
+          topHtml += `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200" title="24 de diciembre en fin de semana: genera automáticamente +1 día DCI">★ 24D (+1 DCI)</span>`;
+        } else {
+          topHtml += `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 cursor-help" title="Día de licencia adicional SAS. Si lo trabajas, las horas sumarán directamente a tu bolsa de exceso (DAJ).">Lic. 24D</span>`;
+        }
+      } else if (isDec31) {
+        if (isWeekend) {
+          topHtml += `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200" title="31 de diciembre en fin de semana: genera automáticamente +1 día DCI">★ 31D (+1 DCI)</span>`;
+        } else {
+          topHtml += `<span class="inline-flex items-center px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold bg-slate-100 text-slate-600 border border-slate-200 cursor-help" title="Día de licencia adicional SAS. Si lo trabajas, las horas sumarán directamente a tu bolsa de exceso (DAJ).">Lic. 31D</span>`;
+        }
+      }
     }
     topHtml += `</div>`;
 
@@ -1444,6 +1565,31 @@ function renderCalendar() {
 
     grid.appendChild(cell);
   }
+
+  // Delegación / listeners para marcar sábados festivos (+1 DCI, máx 2/año)
+  grid.querySelectorAll(".btn-sat-holiday").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const targetDate = btn.dataset.date;
+      if (!AppState.holidaySaturdays) AppState.holidaySaturdays = {};
+
+      const isAlready = !!AppState.holidaySaturdays[targetDate];
+      if (isAlready) {
+        delete AppState.holidaySaturdays[targetDate];
+        updateAll();
+        showToast("Sábado desmarcado como festivo", "info");
+      } else {
+        const dciExceptions = getDciExceptions(year);
+        if (dciExceptions.saturdayHolidayDays >= 2) {
+          showToast("Según la normativa del SAS, solo se compensan un máximo de 2 festivos en sábado al año.", "warning");
+          return;
+        }
+        AppState.holidaySaturdays[targetDate] = true;
+        updateAll();
+        showToast("Sábado marcado como festivo compensable (+1 día DCI)", "success");
+      }
+    });
+  });
 
   const totalRendered = startOffset + daysInCurrentMonth;
   const remainder = totalRendered % 7;
@@ -1630,7 +1776,6 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-amber-50/30">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
-        <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-emerald-50/30">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-300">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 bg-slate-100/40 cell-actual">0.0</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
@@ -1660,7 +1805,6 @@ function renderTable() {
         <td class="py-2.5 px-2 text-center font-mono font-black text-amber-950 bg-amber-50/60 cell-presencial">-</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-emerald-900">${row.vacaciones || 0}</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-purple-900">${row.moscosos || 0}</td>
-        <td class="py-2.5 px-2 text-center font-mono font-black text-emerald-950 bg-emerald-50/60 cell-permisos">-</td>
         <td class="py-2.5 px-2 text-center font-mono font-bold text-cyan-900">${row.dajCount || 0} d</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-actual">-</td>
         <td class="py-2.5 px-2 text-center font-mono text-slate-400 cell-balance">-</td>
@@ -1721,8 +1865,6 @@ function updateTableComputedCells() {
       if (tr) {
         const cellPres = tr.querySelector(".cell-presencial");
         if (cellPres) cellPres.textContent = "0.0";
-        const cellPerm = tr.querySelector(".cell-permisos");
-        if (cellPerm) cellPerm.textContent = "0.0";
         const cellAct = tr.querySelector(".cell-actual");
         if (cellAct) cellAct.textContent = "0.0";
         const cellBal = tr.querySelector(".cell-balance");
@@ -1755,8 +1897,6 @@ function updateTableComputedCells() {
       if (tr) {
         const cellPres = tr.querySelector(".cell-presencial");
         if (cellPres) cellPres.textContent = "-";
-        const cellPerm = tr.querySelector(".cell-permisos");
-        if (cellPerm) cellPerm.textContent = "-";
         const cellAct = tr.querySelector(".cell-actual");
         if (cellAct) {
           cellAct.textContent = "-";
@@ -1777,7 +1917,6 @@ function updateTableComputedCells() {
     }
 
     const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-    const permHours = 0.0; // Base neta: Vacaciones y DCI no computan horas trabajadas
     const actHours = presHours; // Horas efectivas trabajadas
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
@@ -1801,12 +1940,6 @@ function updateTableComputedCells() {
       if (cellPres) {
         cellPres.textContent = presHours.toFixed(1);
         cellPres.className = "py-2.5 px-2 text-center font-mono font-bold text-amber-950 bg-amber-50/70 cell-presencial";
-      }
-
-      const cellPerm = tr.querySelector(".cell-permisos");
-      if (cellPerm) {
-        cellPerm.textContent = "0.0";
-        cellPerm.className = "py-2.5 px-2 text-center font-mono font-bold text-emerald-950 bg-emerald-50/70 cell-permisos";
       }
 
       const cellAct = tr.querySelector(".cell-actual");
@@ -1845,7 +1978,6 @@ function updateTableComputedCells() {
       <td class="py-3 px-2 font-mono text-center font-black text-amber-950 bg-amber-100/80">${totPresentialHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-emerald-900">${totVacaciones}</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-purple-900">${totMoscosos}</td>
-      <td class="py-3 px-2 font-mono text-center font-black text-emerald-950 bg-emerald-100/80">0.0 h</td>
       <td class="py-3 px-2 font-mono text-center font-bold text-cyan-900">${totDajCount} d</td>
       <td class="py-3 px-2 font-mono text-center font-black bg-slate-200">${totActualHours.toFixed(1)} h</td>
       <td class="py-3 px-2 font-mono text-center text-slate-400">-</td>
@@ -2358,9 +2490,20 @@ export function exportarPDF() {
 
   const dciColor = isDciExceeded ? [185, 28, 28] : [88, 28, 135];
   const dciBg = isDciExceeded ? [254, 242, 242] : [250, 245, 255];
-  const dciSub = isDciExceeded
+  let dciSub = isDciExceeded
     ? `⚠️ +${(metrics.totalDciConsumedDays - metrics.totalDciDays).toFixed(1)} d sobre cupo`
     : "Días pendientes / Totales año";
+  let dciSub2 = `${metrics.totalDciConsumedDays} d disfrutados`;
+  if (!isDciExceeded && metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) {
+    const extraParts = [`Base: ${metrics.baseDciDays}d`];
+    if (metrics.dciExceptions.saturdayHolidayDays > 0) {
+      extraParts.push(`+${metrics.dciExceptions.saturdayHolidayDays}d Sáb.`);
+    }
+    if (metrics.dciExceptions.decWeekendDays > 0) {
+      extraParts.push(`+${metrics.dciExceptions.decWeekendDays}d 24/31D`);
+    }
+    dciSub = extraParts.join(" ");
+  }
 
   const cards = [
     {
@@ -2383,7 +2526,7 @@ export function exportarPDF() {
       label: "DÍAS DCI",
       val: `${metrics.remainingDciDays} / ${metrics.totalDciDays} d`,
       sub: dciSub,
-      sub2: `${metrics.totalDciConsumedDays} d disfrutados`,
+      sub2: dciSub2,
       color: dciColor,
       bg: dciBg
     }
@@ -2428,7 +2571,6 @@ export function exportarPDF() {
   let totPresentialHours = 0;
   let totVacaciones = 0;
   let totMoscosos = 0;
-  let totPermitHours = 0;
   let totDajCount = 0;
   let totActualHours = 0;
   let runningAccum = 0;
@@ -2438,7 +2580,7 @@ export function exportarPDF() {
     const reqHours = getMonthRequiredHours(year, m);
 
     if (activeDays === 0) {
-      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "0.0 h", "-", "-", "0.0 h", "-", "0.0 h", "-", "-"];
+      return [MONTH_NAMES[m], "0 d", "0.0 h", "-", "-", "-", "0.0 h", "-", "-", "-", "0.0 h", "-", "-"];
     }
 
     const hasShifts = (
@@ -2457,7 +2599,7 @@ export function exportarPDF() {
         `${activeDays} d`,
         `${reqHours.toFixed(1)} h`,
         "0", "0", "0", "0.0 h",
-        "0", "0", "0.0 h",
+        "0", "0",
         "0 d",
         "0.0 h",
         "Pendiente",
@@ -2466,7 +2608,6 @@ export function exportarPDF() {
     }
 
     const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-    const permHours = 0.0;
     const actHours = presHours;
     const monthBal = parseFloat((actHours - reqHours).toFixed(1));
 
@@ -2478,7 +2619,6 @@ export function exportarPDF() {
     totPresentialHours += presHours;
     totVacaciones += (row.vacaciones || 0);
     totMoscosos += (row.moscosos || 0);
-    totPermitHours += permHours;
     totDajCount += (row.dajCount || 0);
     totActualHours += actHours;
     runningAccum += monthBal;
@@ -2496,7 +2636,6 @@ export function exportarPDF() {
       `${presHours.toFixed(1)} h`,
       String(row.vacaciones || 0),
       String(row.moscosos || 0),
-      `${permHours.toFixed(1)} h`,
       `${row.dajCount || 0} d`,
       `${actHours.toFixed(1)} h`,
       `${signMonth}${monthBal.toFixed(1)} h`,
@@ -2514,7 +2653,6 @@ export function exportarPDF() {
     String(totPresentialHours.toFixed(1)) + " h",
     String(totVacaciones),
     String(totMoscosos),
-    String(totPermitHours.toFixed(1)) + " h",
     `${totDajCount} d`,
     `${totActualHours.toFixed(1)} h`,
     "-",
@@ -2524,7 +2662,7 @@ export function exportarPDF() {
   applyAutoTable(doc, {
     startY: 82,
     margin: { left: margin, right: margin },
-    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "DCI", "Perm.", "DAJ", "Efect.", "Saldo", "Acum."]],
+    head: [["Mes", "Días", "Cuota", "M", "T", "N", "Pres.", "Vac", "DCI", "DAJ", "Efect.", "Saldo", "Acum."]],
     body: tableBody,
     foot: tableFoot,
     theme: "grid",
@@ -2562,16 +2700,15 @@ export function exportarPDF() {
       6: { cellWidth: 14, fontStyle: "bold" },
       7: { cellWidth: 8, fontStyle: "bold" },
       8: { cellWidth: 8, fontStyle: "bold" },
-      9: { cellWidth: 14, fontStyle: "bold" },
-      10: { cellWidth: 10, fontStyle: "bold" },
+      9: { cellWidth: 10, fontStyle: "bold" },
+      10: { cellWidth: 15, fontStyle: "bold" },
       11: { cellWidth: 15, fontStyle: "bold" },
-      12: { cellWidth: 15, fontStyle: "bold" },
-      13: { cellWidth: 16, fontStyle: "bold" }
+      12: { cellWidth: 16, fontStyle: "bold" }
     },
     didParseCell: function(data) {
       if (data.section === "body" || data.section === "foot") {
         const text = data.cell.raw || "";
-        if (data.column.index === 12 || data.column.index === 13) {
+        if (data.column.index === 11 || data.column.index === 12) {
           if (typeof text === "string" && text.startsWith("+")) {
             data.cell.styles.textColor = [21, 128, 61];
           } else if (typeof text === "string" && text.startsWith("-") && text !== "-") {
@@ -2622,7 +2759,7 @@ export function exportarCSV() {
   const hN = parseFloat(AppState.config.hoursN) || 10.0;
 
   let csvContent = "data:text/csv;charset=utf-8,";
-  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días DCI;Horas Permisos;DAJ Disfrutado (d);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
+  csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días DCI;DAJ Disfrutado (d);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
 
   let runningAccum = 0;
 
@@ -2640,17 +2777,16 @@ export function exportarCSV() {
     );
 
     if (activeDays === 0) {
-      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0.0;0;0;0.0;0;0.0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
+      csvContent += `${MONTH_NAMES[m]};0;0.0;0;0;0;0.0;0;0;0;0.0;0.0;0.0;Inactivo (Sin Contrato)\r\n`;
     } else if (!hasShifts) {
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0.0;0;0.0;-;-;Pendiente de rellenar\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};0;0;0;0.0;0;0;0;0.0;-;-;Pendiente de rellenar\r\n`;
     } else {
       const presHours = ((row.mananas || 0) * hM) + ((row.tardes || 0) * hT) + ((row.noches || 0) * hN) + (row.horasEspeciales || 0);
-      const permHours = 0.0;
       const actHours = presHours;
       const monthBal = parseFloat((actHours - reqHours).toFixed(1));
       runningAccum += monthBal;
 
-      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas || 0};${row.tardes || 0};${row.noches || 0};${presHours.toFixed(1)};${row.vacaciones || 0};${row.moscosos || 0};0.0;${row.dajCount || 0};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};Auditado\r\n`;
+      csvContent += `${MONTH_NAMES[m]};${activeDays};${reqHours.toFixed(1)};${row.mananas || 0};${row.tardes || 0};${row.noches || 0};${presHours.toFixed(1)};${row.vacaciones || 0};${row.moscosos || 0};${row.dajCount || 0};${actHours.toFixed(1)};${monthBal.toFixed(1)};${runningAccum.toFixed(1)};Auditado\r\n`;
     }
   });
 
@@ -2820,6 +2956,7 @@ function initApp() {
       try {
         const parsed = JSON.parse(savedCuad);
         if (parsed.calendarShifts) AppState.calendarShifts = parsed.calendarShifts;
+        if (parsed.holidaySaturdays) AppState.holidaySaturdays = parsed.holidaySaturdays;
         if (parsed.monthlyTableData) AppState.monthlyTableData = parsed.monthlyTableData;
         if (parsed.config) Object.assign(AppState.config, parsed.config);
       } catch(e) {}
