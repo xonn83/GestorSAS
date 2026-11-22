@@ -2010,7 +2010,7 @@ function renderCalendar() {
     grid.appendChild(cell);
   }
 
-  let mCount = 0, tCount = 0, nCount = 0, mnCount = 0, mtCount = 0, tnCount = 0, vCount = 0, ldCount = 0, dciCount = 0, gCount = 0;
+  let mCount = 0, tCount = 0, nCount = 0, mnCount = 0, mtCount = 0, tnCount = 0, vCount = 0, ldCount = 0, dciCount = 0, dajCount = 0, gCount = 0;
   let customHoursMonth = 0;
 
   for (let day = 1; day <= daysInCurrentMonth; day++) {
