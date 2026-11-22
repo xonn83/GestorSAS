@@ -320,7 +320,7 @@
                   <span class="text-amber-500">✨</span>
                   <span>Permisos arrastrados del año anterior (opcional)</span>
                 </span>
-                <div class="grid grid-cols-2 gap-2 text-xs">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
                   <div>
                     <label class="block text-slate-600 text-[10px] font-semibold mb-0.5" for="reg-vac-carried">Vacaciones arrastradas</label>
                     <input type="number" id="reg-vac-carried" step="0.5" min="0" max="30" value="0" class="w-full px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium text-xs" />
@@ -328,6 +328,10 @@
                   <div>
                     <label class="block text-slate-600 text-[10px] font-semibold mb-0.5" for="reg-dci-carried">DCI arrastrados</label>
                     <input type="number" id="reg-dci-carried" step="1" min="0" max="15" value="0" class="w-full px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium text-xs" />
+                  </div>
+                  <div>
+                    <label class="block text-slate-600 text-[10px] font-semibold mb-0.5" for="reg-dan-carried">Saldo horas (DAN)</label>
+                    <input type="number" id="reg-dan-carried" step="0.1" value="0" class="w-full px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium text-xs" placeholder="0.0 h" />
                   </div>
                 </div>
               </div>
@@ -440,7 +444,7 @@
               <span class="text-[10px] text-slate-400">Opcional</span>
             </div>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
               <div>
                 <label class="block font-semibold text-slate-700 mb-1" for="edit-vac-carried">
                   Vacaciones arrastradas (año anterior)
@@ -454,6 +458,13 @@
                 </label>
                 <input type="number" id="edit-dci-carried" step="1" min="0" max="15" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" placeholder="0 días (hasta 31 ene)" />
                 <span class="text-[10px] text-slate-500 mt-0.5 block">Disfrute preferente: 1 al 31 de enero</span>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="edit-dan-carried">
+                  Saldo horas año anterior (DAN)
+                </label>
+                <input type="number" id="edit-dan-carried" step="0.1" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" placeholder="0.0 h (exceso o déficit)" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block">Sin caducidad automática</span>
               </div>
             </div>
 
@@ -675,39 +686,52 @@
             <span class="font-bold text-slate-800 text-xs block" id="rollover-audit-header">
               Auditoría del ejercicio anterior
             </span>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               <div class="bg-white p-2.5 rounded-lg border border-slate-200/80">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">DCI sobrantes</span>
                 <span class="text-base font-black text-purple-700 block mt-0.5" id="rollover-audit-dci-val">0 días</span>
-                <span class="text-[10px] text-slate-500 block">Disfrutables hasta el 31 de enero</span>
+                <span class="text-[10px] text-slate-500 block">Hasta 31 de enero</span>
               </div>
               <div class="bg-white p-2.5 rounded-lg border border-slate-200/80">
                 <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Vacaciones sobrantes</span>
                 <span class="text-base font-black text-emerald-700 block mt-0.5" id="rollover-audit-vac-val">0 días</span>
-                <span class="text-[10px] text-slate-500 block">Disfrutables hasta el 15 de enero</span>
+                <span class="text-[10px] text-slate-500 block">Hasta 15 de enero</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200/80">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Saldo horas (DAN)</span>
+                <span class="text-base font-black text-cyan-700 block mt-0.5" id="rollover-audit-dan-val">+0.0 h</span>
+                <span class="text-[10px] text-slate-500 block">Sin caducidad</span>
               </div>
             </div>
           </div>
 
           <!-- Campos de Traspaso con Límite Máximo Anti-Trampas -->
           <div class="space-y-2.5 pt-1">
-            <span class="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">Días a traspasar a este ejercicio</span>
+            <span class="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">Permisos y saldo a traspasar a este ejercicio</span>
             
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
                 <label class="block font-semibold text-slate-700 mb-1" for="rollover-vac-input">
-                  Vacaciones a traspasar:
+                  Vacaciones (días):
                 </label>
                 <input type="number" id="rollover-vac-input" step="0.5" min="0" max="0" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold text-slate-800" />
-                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-vac-max-hint">Máx. permitido: 0 días</span>
+                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-vac-max-hint">Máx.: 0 días</span>
               </div>
 
               <div>
                 <label class="block font-semibold text-slate-700 mb-1" for="rollover-dci-input">
-                  DCI a traspasar:
+                  DCI (días):
                 </label>
                 <input type="number" id="rollover-dci-input" step="1" min="0" max="0" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold text-slate-800" />
-                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-dci-max-hint">Máx. permitido: 0 días</span>
+                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-dci-max-hint">Máx.: 0 días</span>
+              </div>
+
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="rollover-dan-input">
+                  Horas DAN:
+                </label>
+                <input type="number" id="rollover-dan-input" step="0.1" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold text-slate-800" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-dan-max-hint">Máx.: +0.0 h</span>
               </div>
             </div>
 
@@ -924,6 +948,7 @@
           </div>
           <div class="my-0.5">
             <span id="kpi-dci-hours" class="text-xl sm:text-2xl font-black tracking-tight text-cyan-700 block">0 Días</span>
+            <p id="kpi-dci-extra" class="text-[10px] font-bold text-cyan-800 mt-0.5 hidden"></p>
             <p id="kpi-dci-label" class="text-[10px] sm:text-xs font-semibold text-slate-600 mt-0.5 truncate">0,0 h netas de exceso (÷ 7h)</p>
           </div>
           <div class="pt-2 border-t border-slate-100 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between min-h-[25px]">
@@ -1407,22 +1432,22 @@
             </div>
           </div>
 
-          <!-- Bloque 6: Plazos de Disfrute en Enero del Remanente y Excepciones Legales -->
+          <!-- Bloque 6: Plazos de Disfrute en Enero del Remanente, Horas DAN y Excepciones Legales -->
           <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
             <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wide mb-2 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-amber-600"></span>
-              <span>6. Plazos de Disfrute del Remanente en Enero y Excepciones Legales</span>
+              <span>6. Plazos de Disfrute del Remanente en Enero, DAN y Excepciones Legales</span>
             </h4>
             <div class="space-y-3 text-xs">
               <div class="space-y-1.5">
                 <div class="flex items-center gap-2">
-                  <span class="font-semibold text-slate-800">Caducidad Oficial SAS del Ejercicio Anterior:</span>
+                  <span class="font-semibold text-slate-800">Cierre de Ejercicio y Caducidad Oficial SAS:</span>
                   <span class="text-[10px] font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">Instrucción SAS / Mesa Sectorial</span>
                 </div>
                 <p class="text-slate-600 leading-relaxed">
-                  Conforme a la normativa del SAS y el Estatuto Marco, los días no disfrutados del año anterior pueden prorrogarse en enero con plazos estrictos:
+                  Conforme a la normativa del SAS y el Estatuto Marco, los permisos y el saldo de horas del año anterior se gestionan al inicio del nuevo ejercicio:
                 </p>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                   <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
                     <div class="font-bold text-amber-900 flex items-center gap-1.5">
                       <span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black">📅 Vacaciones del año anterior (Hasta 15 de enero)</span>
@@ -1437,6 +1462,14 @@
                     </div>
                     <p class="text-[11px] text-slate-600 leading-relaxed">
                       Los días DCI arrastrados deben disfrutarse prioritariamente hasta el <strong>31 de enero</strong>. A partir del 1 de febrero, los días DCI sobrantes del año anterior <strong>caducan automáticamente</strong>.
+                    </p>
+                  </div>
+                  <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
+                    <div class="font-bold text-cyan-900 flex items-center gap-1.5">
+                      <span class="text-xs bg-cyan-100 text-cyan-800 px-1.5 py-0.5 rounded font-black">⏱️ Exceso de Horas / DAN (Descanso Año Anterior)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      El saldo neto de horas resultante al cierre del año anterior pasa al nuevo ejercicio bajo el concepto de <strong>DAN (Descanso Año Anterior)</strong>. A diferencia de las vacaciones y los DCI, este saldo <strong>no caduca automáticamente en enero</strong>; permanece en la bolsa de exceso para compensarse mediante días <strong>[DAJ] (Ajuste)</strong> o ajustes de cuadrante.
                     </p>
                   </div>
                 </div>

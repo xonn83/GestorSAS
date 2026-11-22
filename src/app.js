@@ -92,10 +92,12 @@ export const AppState = {
     proposedDates: "",
     vacationsCarried: 0,
     dciCarried: 0,
+    danCarried: 0.0,
     carriedJustified: false,
     carriedFromYear: 0,
     carriedMaxVacations: null,
-    carriedMaxDci: null
+    carriedMaxDci: null,
+    carriedMaxDan: null
   },
   calendarYear: currentYear,
   calendarMonth: currentMonth,
@@ -813,6 +815,62 @@ export function getPreviousYearAudit(prevYear = AppState.calendarYear - 1) {
   const remainingVac = Math.max(0, parseFloat((totalEntitledVac - vConsumed).toFixed(1)));
   const remainingDci = Math.max(0, Math.round(totalEntitledDci - dciConsumed));
 
+  // Auditoría del saldo de horas (DAN - Descanso Año Anterior) de prevYear
+  const hM = parseFloat(AppState.config.hoursM) || 7.0;
+  const hT = parseFloat(AppState.config.hoursT) || 7.0;
+  const hN = parseFloat(AppState.config.hoursN) || 10.0;
+
+  let workedInAudited = 0;
+  let requiredInAudited = 0;
+  let lastFilledM = -1;
+
+  const monthDataPrev = [];
+  for (let m = 0; m < 12; m++) {
+    const daysInM = getDaysInMonth(prevYear, m);
+    let mCount = 0, tCount = 0, nCount = 0, vCount = 0, dciCount = 0, dajCount = 0, customH = 0;
+    for (let d = 1; d <= daysInM; d++) {
+      const dateStr = formatISODate(prevYear, m, d);
+      const shift = AppState.calendarShifts ? AppState.calendarShifts[dateStr] : null;
+      if (!shift) continue;
+      if (shift === "M") mCount++;
+      else if (shift === "T") tCount++;
+      else if (shift === "N") nCount++;
+      else if (shift === "MN") { mCount++; nCount++; }
+      else if (shift === "MT") { mCount++; tCount++; }
+      else if (shift === "TN") { tCount++; nCount++; }
+      else if (shift === "V") vCount++;
+      else if (shift === "DCI" || shift === "LD") dciCount++;
+      else if (shift === "DAJ") dajCount++;
+      else if (shift === "G") customH += 17.0;
+      else if (typeof shift === "string" && shift.startsWith("P")) {
+        const parts = shift.split(":");
+        customH += parseFloat(parts[1]) || 0;
+      } else if (typeof shift === "object" && shift?.code === "P") {
+        customH += parseFloat(shift.hours) || 0;
+      }
+    }
+    const hasShiftsInM = (mCount > 0 || tCount > 0 || nCount > 0 || vCount > 0 || dciCount > 0 || dajCount > 0 || customH > 0);
+    const actDays = (contractDays > 0) ? getMonthActiveContractDays(prevYear, m) : (totalShifts > 0 ? daysInM : 0);
+    if (actDays > 0 && hasShiftsInM) {
+      lastFilledM = m;
+    }
+    monthDataPrev.push({ mCount, tCount, nCount, customH, actDays, hasShiftsInM });
+  }
+
+  if (lastFilledM >= 0) {
+    for (let m = 0; m <= lastFilledM; m++) {
+      const md = monthDataPrev[m];
+      if (md.actDays > 0) {
+        const presHours = (md.mCount * hM) + (md.tCount * hT) + (md.nCount * hN) + md.customH;
+        workedInAudited += presHours;
+        requiredInAudited += getMonthRequiredHours(prevYear, m);
+      }
+    }
+  }
+
+  const rawDanBalance = lastFilledM >= 0 ? parseFloat((workedInAudited - requiredInAudited).toFixed(1)) : 0.0;
+  const remainingHoursDan = Math.abs(rawDanBalance) < 0.05 ? 0.0 : rawDanBalance;
+
   return {
     prevYear,
     hasHistory,
@@ -822,7 +880,8 @@ export function getPreviousYearAudit(prevYear = AppState.calendarYear - 1) {
     vConsumed,
     dciConsumed,
     remainingVac,
-    remainingDci
+    remainingDci,
+    remainingHoursDan
   };
 }
 
@@ -835,14 +894,17 @@ export function openRolloverModal(targetYear = AppState.calendarYear - 1) {
   const auditHeader = document.getElementById("rollover-audit-header");
   const auditDciVal = document.getElementById("rollover-audit-dci-val");
   const auditVacVal = document.getElementById("rollover-audit-vac-val");
+  const auditDanVal = document.getElementById("rollover-audit-dan-val");
   const vacInput = document.getElementById("rollover-vac-input");
   const dciInput = document.getElementById("rollover-dci-input");
+  const danInput = document.getElementById("rollover-dan-input");
   const vacMaxHint = document.getElementById("rollover-vac-max-hint");
   const dciMaxHint = document.getElementById("rollover-dci-max-hint");
+  const danMaxHint = document.getElementById("rollover-dan-max-hint");
   const justifiedCheck = document.getElementById("rollover-justified-check");
 
   if (modalTitle) {
-    modalTitle.textContent = `Traspaso de Remanente de Permisos (${targetYear} → ${AppState.calendarYear})`;
+    modalTitle.textContent = `Traspaso de Remanente de Permisos y Horas (${targetYear} → ${AppState.calendarYear})`;
   }
   if (auditHeader) {
     auditHeader.textContent = `Auditoría del ejercicio anterior (${targetYear})`;
@@ -853,9 +915,17 @@ export function openRolloverModal(targetYear = AppState.calendarYear - 1) {
   if (auditVacVal) {
     auditVacVal.textContent = `${prevAudit.remainingVac} días`;
   }
+  if (auditDanVal) {
+    const danSign = prevAudit.remainingHoursDan > 0 ? "+" : "";
+    auditDanVal.textContent = `${danSign}${prevAudit.remainingHoursDan.toFixed(1)} h`;
+    auditDanVal.className = prevAudit.remainingHoursDan > 0.05
+      ? "text-base font-black text-cyan-700 block mt-0.5"
+      : (prevAudit.remainingHoursDan < -0.05 ? "text-base font-black text-rose-600 block mt-0.5" : "text-base font-black text-slate-700 block mt-0.5");
+  }
 
   const maxVac = prevAudit.remainingVac;
   const maxDci = prevAudit.remainingDci;
+  const maxDan = prevAudit.remainingHoursDan;
 
   if (vacInput) {
     vacInput.max = maxVac;
@@ -881,6 +951,22 @@ export function openRolloverModal(targetYear = AppState.calendarYear - 1) {
     dciMaxHint.textContent = `Máx. permitido: ${maxDci} días (auditado en ${targetYear})`;
   }
 
+  if (danInput) {
+    if (maxDan > 0) {
+      danInput.max = maxDan;
+    } else {
+      danInput.max = 0;
+    }
+    const curVal = AppState.config.carriedFromYear === targetYear && AppState.config.danCarried !== undefined
+      ? AppState.config.danCarried
+      : maxDan;
+    danInput.value = curVal;
+  }
+  if (danMaxHint) {
+    const signHint = maxDan > 0 ? "+" : "";
+    danMaxHint.textContent = `Máx. permitido: ${signHint}${maxDan.toFixed(1)} h (auditado en ${targetYear})`;
+  }
+
   if (justifiedCheck) {
     justifiedCheck.checked = !!AppState.config.carriedJustified;
   }
@@ -889,7 +975,7 @@ export function openRolloverModal(targetYear = AppState.calendarYear - 1) {
 }
 
 export function getMonthPermissionDays(year, month) {
-  const row = AppState.monthlyTableData ? AppState.monthlyTableData[month] : null;
+  const row = (AppState.calendarYear === year && AppState.monthlyTableData) ? AppState.monthlyTableData[month] : null;
   if (row && typeof row.vacaciones === "number" && typeof row.moscosos === "number") {
     return {
       vacaciones: row.vacaciones || 0,
@@ -900,7 +986,7 @@ export function getMonthPermissionDays(year, month) {
   const daysInMonth = getDaysInMonth(year, month);
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = formatISODate(year, month, day);
-    if (!isDateInsideContract(dateStr)) continue;
+    if (year === AppState.calendarYear && !isDateInsideContract(dateStr)) continue;
     const shift = AppState.calendarShifts ? AppState.calendarShifts[dateStr] : null;
     if (shift === "V") v++;
     else if (shift === "DCI" || shift === "LD") dci++;
@@ -909,7 +995,11 @@ export function getMonthPermissionDays(year, month) {
 }
 
 export function getMonthRequiredHours(year, month) {
-  const activeDays = getMonthActiveContractDays(year, month);
+  let activeDays = getMonthActiveContractDays(year, month);
+  const contractTotal = getContractDaysTotal(year);
+  if (contractTotal === 0 && year < AppState.calendarYear) {
+    activeDays = getDaysInMonth(year, month);
+  }
   if (activeDays === 0) return 0.0;
   const daysInYear = getDaysInYear(year);
   const baseHours = parseFloat(AppState.config.baseHours) || 1540;
@@ -925,7 +1015,11 @@ export function getMonthRequiredHours(year, month) {
   // Cómputo por diferencia acumulada para cuadre perfecto al decimal
   let cumDaysBefore = 0;
   for (let m = 0; m < month; m++) {
-    cumDaysBefore += getMonthActiveContractDays(year, m);
+    if (contractTotal === 0 && year < AppState.calendarYear) {
+      cumDaysBefore += getDaysInMonth(year, m);
+    } else {
+      cumDaysBefore += getMonthActiveContractDays(year, m);
+    }
   }
   const cumDaysCurrent = cumDaysBefore + activeDays;
 
@@ -952,8 +1046,9 @@ export function purgeShiftsOutsideContract() {
   if (!AppState.config.startDate) return 0;
   let purgedCount = 0;
   const shiftDates = Object.keys(AppState.calendarShifts || {});
+  const curYearPrefix = `${AppState.calendarYear}-`;
   shiftDates.forEach(dateStr => {
-    if (!isDateInsideContract(dateStr)) {
+    if (dateStr.startsWith(curYearPrefix) && !isDateInsideContract(dateStr)) {
       delete AppState.calendarShifts[dateStr];
       purgedCount++;
     }
@@ -961,7 +1056,7 @@ export function purgeShiftsOutsideContract() {
 
   if (AppState.holidaySaturdays) {
     Object.keys(AppState.holidaySaturdays).forEach(dateStr => {
-      if (!isDateInsideContract(dateStr)) {
+      if (dateStr.startsWith(curYearPrefix) && !isDateInsideContract(dateStr)) {
         delete AppState.holidaySaturdays[dateStr];
       }
     });
@@ -1263,10 +1358,12 @@ export async function flushCloudSave() {
       proposedDates: AppState.config.proposedDates || "",
       vacationsCarried: parseFloat(AppState.config.vacationsCarried) || 0,
       dciCarried: parseInt(AppState.config.dciCarried) || 0,
+      danCarried: parseFloat(AppState.config.danCarried) || 0.0,
       carriedJustified: !!AppState.config.carriedJustified,
       carriedFromYear: parseInt(AppState.config.carriedFromYear) || 0,
       carriedMaxVacations: AppState.config.carriedMaxVacations !== null && AppState.config.carriedMaxVacations !== undefined ? parseFloat(AppState.config.carriedMaxVacations) : null,
       carriedMaxDci: AppState.config.carriedMaxDci !== null && AppState.config.carriedMaxDci !== undefined ? parseInt(AppState.config.carriedMaxDci) : null,
+      carriedMaxDan: AppState.config.carriedMaxDan !== null && AppState.config.carriedMaxDan !== undefined ? parseFloat(AppState.config.carriedMaxDan) : null,
       calendarShifts: AppState.calendarShifts || {},
       holidaySaturdays: AppState.holidaySaturdays || {},
       monthlyTableData: AppState.monthlyTableData,
@@ -1381,10 +1478,12 @@ export async function loadUserData(user) {
       if (cData.proposedDates) AppState.config.proposedDates = cData.proposedDates;
       if (cData.vacationsCarried !== undefined) AppState.config.vacationsCarried = parseFloat(cData.vacationsCarried) || 0;
       if (cData.dciCarried !== undefined) AppState.config.dciCarried = parseInt(cData.dciCarried) || 0;
+      if (cData.danCarried !== undefined) AppState.config.danCarried = parseFloat(cData.danCarried) || 0.0;
       if (cData.carriedJustified !== undefined) AppState.config.carriedJustified = !!cData.carriedJustified;
       if (cData.carriedFromYear !== undefined) AppState.config.carriedFromYear = parseInt(cData.carriedFromYear) || 0;
       if (cData.carriedMaxVacations !== undefined) AppState.config.carriedMaxVacations = cData.carriedMaxVacations;
       if (cData.carriedMaxDci !== undefined) AppState.config.carriedMaxDci = cData.carriedMaxDci;
+      if (cData.carriedMaxDan !== undefined) AppState.config.carriedMaxDan = cData.carriedMaxDan;
     } else {
       // Nuevo usuario registrado: cuadrante limpio listo para su uso
       AppState.calendarShifts = {};
@@ -1621,9 +1720,13 @@ export function getAccumulatedMetrics() {
     : 0.0;
   const accumulatedBalance = Math.abs(rawAccumulatedBalance) < 0.05 ? 0.0 : rawAccumulatedBalance;
 
+  // Saldo total acumulado considerando el saldo inicial DAN del año anterior (Descanso Año Anterior):
+  const danCarried = parseFloat(AppState.config.danCarried) || 0.0;
+  const netBalanceWithDan = parseFloat(((filledMonthsCount > 0 ? accumulatedBalance : 0.0) + danCarried).toFixed(1));
+
   // Exceso de Jornada (DAJ):
   // El exceso real consolidado coincide con el saldo neto positivo. Cada 7h genera 1 día DAJ.
-  const dajNetHours = accumulatedBalance > 0 ? accumulatedBalance : 0.0;
+  const dajNetHours = netBalanceWithDan > 0 ? netBalanceWithDan : 0.0;
   const dajDaysAvailable = Math.floor(dajNetHours / 7.0);
   const dajRemainderHours = parseFloat((dajNetHours % 7.0).toFixed(1));
   const dajExactDays = parseFloat((dajNetHours / 7.0).toFixed(1));
@@ -1665,6 +1768,9 @@ export function getAccumulatedMetrics() {
     presentialInAuditedMonths,
     permitsInFilledMonths: 0.0,
     accumulatedBalance,
+    danCarried,
+    netBalanceWithDan,
+    totalAccumulatedBalance: netBalanceWithDan,
     // Exceso de Jornada (DAJ)
     dajNetHours,
     dajDaysAvailable,
@@ -1719,6 +1825,18 @@ function renderKpis() {
   const dciLabelEl = document.getElementById("kpi-dci-label");
   const dciBadgeEl = document.getElementById("kpi-dci-badge");
   const dciSubEl = document.getElementById("kpi-dci-sub");
+  const dciExtraEl = document.getElementById("kpi-dci-extra");
+
+  if (dciExtraEl) {
+    if (Math.abs(metrics.danCarried) > 0.05) {
+      const signDan = metrics.danCarried > 0 ? "+" : "";
+      dciExtraEl.textContent = `Incluye ${signDan}${metrics.danCarried.toFixed(1)} h DAN año ant.`;
+      dciExtraEl.className = "text-[10px] font-bold text-cyan-800 mt-0.5 block";
+    } else {
+      dciExtraEl.className = "hidden";
+      dciExtraEl.textContent = "";
+    }
+  }
 
   if (dciBadgeEl) {
     dciBadgeEl.className = "hidden";
@@ -1729,8 +1847,8 @@ function renderKpis() {
       const dayWord = metrics.dajDaysAvailable === 1 ? "Día" : "Días";
       dciHoursEl.textContent = `+${metrics.dajDaysAvailable} ${dayWord}`;
       dciHoursEl.className = "text-xl sm:text-2xl font-black tracking-tight text-cyan-700 block";
-    } else if (metrics.accumulatedBalance < 0) {
-      dciHoursEl.textContent = `${metrics.accumulatedBalance.toFixed(1)} h`;
+    } else if (metrics.netBalanceWithDan < -0.05) {
+      dciHoursEl.textContent = `${metrics.netBalanceWithDan.toFixed(1)} h`;
       dciHoursEl.className = "text-xl sm:text-2xl font-black tracking-tight text-rose-600 block";
     } else {
       dciHoursEl.textContent = "0 Días";
@@ -1744,10 +1862,10 @@ function renderKpis() {
   if (dciLabelEl) {
     if (metrics.dajNetHours > 0) {
       dciLabelEl.innerHTML = `<span class="font-bold text-cyan-800">+${metrics.dajNetHours.toFixed(1)} h netas</span> (+${metrics.dajRemainderHours}h remanente)`;
-    } else if (metrics.accumulatedBalance < 0) {
+    } else if (metrics.netBalanceWithDan < -0.05) {
       dciLabelEl.innerHTML = `<span class="font-bold text-rose-700">Déficit acumulado de jornada ordinaria</span>`;
     } else {
-      dciLabelEl.textContent = metrics.filledMonthsCount > 0 ? "Jornada ordinaria al día (sin exceso)" : "0 días libres disponibles (÷ 7h)";
+      dciLabelEl.textContent = (metrics.filledMonthsCount > 0 || Math.abs(metrics.danCarried) > 0.05) ? "Jornada ordinaria al día (sin exceso)" : "0 días libres disponibles (÷ 7h)";
     }
   }
   if (dciSubEl) {
@@ -1968,16 +2086,24 @@ function renderCalendar() {
     if (month === 0) {
       const prevYear = year - 1;
       const prevAudit = getPreviousYearAudit(prevYear);
-      const isAlreadyApplied = (AppState.config.carriedFromYear === prevYear) || (AppState.config.vacationsCarried > 0 || AppState.config.dciCarried > 0);
+      const isAlreadyApplied = (AppState.config.carriedFromYear === prevYear) || (AppState.config.vacationsCarried > 0 || AppState.config.dciCarried > 0 || Math.abs(AppState.config.danCarried || 0) > 0.05);
 
-      if (prevAudit.hasHistory && (prevAudit.remainingVac > 0 || prevAudit.remainingDci > 0 || isAlreadyApplied)) {
+      if (prevAudit.hasHistory && (prevAudit.remainingVac > 0 || prevAudit.remainingDci > 0 || Math.abs(prevAudit.remainingHoursDan || 0) > 0.05 || isAlreadyApplied)) {
         rolloverContainer.classList.remove("hidden");
         if (isAlreadyApplied) {
           if (btnRolloverModal) btnRolloverModal.classList.add("hidden");
           if (btnRolloverApplied) {
             btnRolloverApplied.classList.remove("hidden");
             if (btnRolloverAppliedLabel) {
-              btnRolloverAppliedLabel.textContent = `Remanente ${prevYear} aplicado (${AppState.config.vacationsCarried || 0}V, ${AppState.config.dciCarried || 0}DCI)`;
+              const appliedParts = [];
+              if (AppState.config.vacationsCarried > 0) appliedParts.push(`${AppState.config.vacationsCarried}V`);
+              if (AppState.config.dciCarried > 0) appliedParts.push(`${AppState.config.dciCarried}DCI`);
+              if (Math.abs(AppState.config.danCarried || 0) > 0.05) {
+                const sDan = AppState.config.danCarried > 0 ? "+" : "";
+                appliedParts.push(`${sDan}${AppState.config.danCarried.toFixed(1)}h DAN`);
+              }
+              const appliedText = appliedParts.length > 0 ? appliedParts.join(", ") : "0V, 0DCI, 0h DAN";
+              btnRolloverAppliedLabel.textContent = `Remanente ${prevYear} aplicado (${appliedText})`;
             }
           }
         } else {
@@ -1985,7 +2111,15 @@ function renderCalendar() {
           if (btnRolloverModal) {
             btnRolloverModal.classList.remove("hidden");
             if (btnRolloverLabel) {
-              btnRolloverLabel.textContent = `✨ Traspasar remanente ${prevYear} (${prevAudit.remainingVac}V / ${prevAudit.remainingDci}DCI)`;
+              const auditParts = [];
+              if (prevAudit.remainingVac > 0) auditParts.push(`${prevAudit.remainingVac}V`);
+              if (prevAudit.remainingDci > 0) auditParts.push(`${prevAudit.remainingDci}DCI`);
+              if (Math.abs(prevAudit.remainingHoursDan) > 0.05) {
+                const sDan = prevAudit.remainingHoursDan > 0 ? "+" : "";
+                auditParts.push(`${sDan}${prevAudit.remainingHoursDan.toFixed(1)}h DAN`);
+              }
+              const auditText = auditParts.length > 0 ? auditParts.join(" / ") : `${prevAudit.remainingVac}V / ${prevAudit.remainingDci}DCI`;
+              btnRolloverLabel.textContent = `✨ Traspasar remanente ${prevYear} (${auditText})`;
             }
           }
         }
@@ -2448,7 +2582,7 @@ function updateTableComputedCells() {
   let totMoscosos = 0;
   let totDajCount = 0;
   let totActualHours = 0;
-  let runningAccumBalance = 0;
+  let runningAccumBalance = parseFloat(AppState.config.danCarried) || 0.0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -2873,17 +3007,26 @@ export function syncEditModalInputsFromState() {
 
   setVal("edit-vac-carried", AppState.config.vacationsCarried || 0);
   setVal("edit-dci-carried", AppState.config.dciCarried || 0);
+  setVal("edit-dan-carried", AppState.config.danCarried !== undefined ? AppState.config.danCarried : 0);
   const chkJustified = document.getElementById("edit-carried-justified");
   if (chkJustified) {
     chkJustified.checked = !!AppState.config.carriedJustified;
   }
   const editVacCarriedInput = document.getElementById("edit-vac-carried");
   const editDciCarriedInput = document.getElementById("edit-dci-carried");
+  const editDanCarriedInput = document.getElementById("edit-dan-carried");
   if (AppState.config.carriedMaxVacations !== null && AppState.config.carriedMaxVacations !== undefined && editVacCarriedInput) {
     editVacCarriedInput.max = AppState.config.carriedMaxVacations;
   }
   if (AppState.config.carriedMaxDci !== null && AppState.config.carriedMaxDci !== undefined && editDciCarriedInput) {
     editDciCarriedInput.max = AppState.config.carriedMaxDci;
+  }
+  if (AppState.config.carriedMaxDan !== null && AppState.config.carriedMaxDan !== undefined && editDanCarriedInput) {
+    if (AppState.config.carriedMaxDan > 0) {
+      editDanCarriedInput.max = AppState.config.carriedMaxDan;
+    } else {
+      editDanCarriedInput.max = 0;
+    }
   }
 }
 
@@ -3091,12 +3234,16 @@ export function exportarPDF() {
 
   const dajVal = metrics.dajDaysAvailable > 0
     ? `+${metrics.dajDaysAvailable} DÍAS`
-    : (metrics.accumulatedBalance < 0 ? `${metrics.accumulatedBalance.toFixed(1)} h` : "0 DÍAS");
-  const dajSub = metrics.dajNetHours > 0
+    : (metrics.netBalanceWithDan < -0.05 ? `${metrics.netBalanceWithDan.toFixed(1)} h` : "0 DÍAS");
+  let dajSub = metrics.dajNetHours > 0
     ? `+${metrics.dajNetHours.toFixed(1)} h netas (÷ 7h)`
-    : (metrics.accumulatedBalance < 0 ? "Déficit de jornada" : "Jornada al día");
-  const dajColor = metrics.accumulatedBalance < 0 ? [185, 28, 28] : [4, 120, 87];
-  const dajBg = metrics.accumulatedBalance < 0 ? [254, 242, 242] : [236, 253, 245];
+    : (metrics.netBalanceWithDan < -0.05 ? "Déficit de jornada" : "Jornada al día");
+  if (Math.abs(metrics.danCarried) > 0.05) {
+    const signDan = metrics.danCarried > 0 ? "+" : "";
+    dajSub += ` (${signDan}${metrics.danCarried.toFixed(1)}h DAN)`;
+  }
+  const dajColor = metrics.netBalanceWithDan < -0.05 ? [185, 28, 28] : [4, 120, 87];
+  const dajBg = metrics.netBalanceWithDan < -0.05 ? [254, 242, 242] : [236, 253, 245];
 
   const isVacExceeded = metrics.totalVacationConsumedDays > metrics.totalVacationDays;
   const isDciExceeded = metrics.totalDciConsumedDays > metrics.totalDciDays;
@@ -3195,7 +3342,7 @@ export function exportarPDF() {
   let totMoscosos = 0;
   let totDajCount = 0;
   let totActualHours = 0;
-  let runningAccum = 0;
+  let runningAccum = parseFloat(AppState.config.danCarried) || 0.0;
 
   const tableBody = AppState.monthlyTableData.map((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -3383,7 +3530,7 @@ export function exportarCSV() {
   let csvContent = "data:text/csv;charset=utf-8,";
   csvContent += "Mes;Dias Contrato;Cuota Exigible (h);Mananas;Tardes;Noches;Horas Presenciales;Vacaciones;Días DCI;DAJ Disfrutado (d);Horas Efectivas;Saldo Mes (h);Saldo Acumulado (h);Estado\r\n";
 
-  let runningAccum = 0;
+  let runningAccum = parseFloat(AppState.config.danCarried) || 0.0;
 
   AppState.monthlyTableData.forEach((row, m) => {
     const activeDays = getMonthActiveContractDays(year, m);
@@ -3891,8 +4038,10 @@ function initApp() {
 
         const regVacCarried = parseFloat(document.getElementById("reg-vac-carried")?.value) || 0;
         const regDciCarried = parseInt(document.getElementById("reg-dci-carried")?.value) || 0;
+        const regDanCarried = parseFloat(document.getElementById("reg-dan-carried")?.value) || 0.0;
         AppState.config.vacationsCarried = regVacCarried;
         AppState.config.dciCarried = regDciCarried;
+        AppState.config.danCarried = regDanCarried;
         AppState.config.carriedJustified = false;
 
         const uid = user ? user.uid : ("usr_" + Math.random().toString(36).substring(2, 10));
@@ -3911,6 +4060,7 @@ function initApp() {
           baseHours: baseHours,
           vacationsCarried: regVacCarried,
           dciCarried: regDciCarried,
+          danCarried: regDanCarried,
           carriedJustified: false
         };
         saveLocalAccount(accountData);
@@ -3970,6 +4120,7 @@ function initApp() {
                 proposedDates: "",
                 vacationsCarried: regVacCarried,
                 dciCarried: regDciCarried,
+                danCarried: regDanCarried,
                 carriedJustified: false,
                 calendarShifts: {},
                 monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
@@ -4117,6 +4268,7 @@ function initApp() {
 
       const vacCarriedInput = parseFloat(document.getElementById("edit-vac-carried")?.value) || 0;
       const dciCarriedInput = parseInt(document.getElementById("edit-dci-carried")?.value) || 0;
+      const danCarriedInput = parseFloat(document.getElementById("edit-dan-carried")?.value) || 0.0;
       const carriedJustified = !!document.getElementById("edit-carried-justified")?.checked;
 
       // Control anti-trampas si existen límites máximos auditados fijados
@@ -4132,9 +4284,19 @@ function initApp() {
           return;
         }
       }
+      if (AppState.config.carriedMaxDan !== null && AppState.config.carriedMaxDan !== undefined) {
+        if (AppState.config.carriedMaxDan > 0 && danCarriedInput > AppState.config.carriedMaxDan) {
+          showToast(`Control anti-trampas: No puedes superar el saldo auditado de horas DAN (${AppState.config.carriedMaxDan > 0 ? '+' : ''}${AppState.config.carriedMaxDan} h).`, "error");
+          return;
+        } else if (AppState.config.carriedMaxDan <= 0 && danCarriedInput > 0) {
+          showToast("Control anti-trampas: No generaste exceso de horas a favor en el ejercicio anterior.", "error");
+          return;
+        }
+      }
 
       AppState.config.vacationsCarried = Math.max(0, vacCarriedInput);
       AppState.config.dciCarried = Math.max(0, dciCarriedInput);
+      AppState.config.danCarried = parseFloat(danCarriedInput.toFixed(1));
       AppState.config.carriedJustified = carriedJustified;
 
       const startYear = parseISODate(AppState.config.startDate).getFullYear();
@@ -4635,15 +4797,18 @@ function initApp() {
       const prevAudit = getPreviousYearAudit(targetPrevYear);
       const vacInput = document.getElementById("rollover-vac-input");
       const dciInput = document.getElementById("rollover-dci-input");
+      const danInput = document.getElementById("rollover-dan-input");
       const justifiedCheck = document.getElementById("rollover-justified-check");
 
       const vacVal = parseFloat(vacInput?.value) || 0;
       const dciVal = parseInt(dciInput?.value) || 0;
+      const danVal = parseFloat(danInput?.value) || 0.0;
       const justifiedVal = !!justifiedCheck?.checked;
 
-      // Control anti-trampas: el número no puede superar los días sobrantes reales auditados
+      // Control anti-trampas: el número no puede superar los días y horas sobrantes reales auditados
       const maxVac = prevAudit.remainingVac;
       const maxDci = prevAudit.remainingDci;
+      const maxDan = prevAudit.remainingHoursDan;
 
       if (vacVal > maxVac) {
         showToast(`Control anti-trampas: No puedes traspasar más de ${maxVac} días de vacaciones sobrantes de ${targetPrevYear}.`, "error");
@@ -4653,23 +4818,33 @@ function initApp() {
         showToast(`Control anti-trampas: No puedes traspasar más de ${maxDci} días DCI sobrantes de ${targetPrevYear}.`, "error");
         return;
       }
+      if (maxDan > 0 && danVal > maxDan) {
+        showToast(`Control anti-trampas: No puedes traspasar más de +${maxDan.toFixed(1)} h de saldo DAN de ${targetPrevYear}.`, "error");
+        return;
+      } else if (maxDan <= 0 && danVal > 0) {
+        showToast(`Control anti-trampas: En ${targetPrevYear} no generaste saldo de horas a favor. No puedes introducir un valor positivo.`, "error");
+        return;
+      }
       if (vacVal < 0 || dciVal < 0) {
-        showToast("Los valores a traspasar no pueden ser negativos.", "error");
+        showToast("Los días de vacaciones y DCI a traspasar no pueden ser negativos.", "error");
         return;
       }
 
       AppState.config.vacationsCarried = vacVal;
       AppState.config.dciCarried = dciVal;
+      AppState.config.danCarried = parseFloat(danVal.toFixed(1));
       AppState.config.carriedJustified = justifiedVal;
       AppState.config.carriedFromYear = targetPrevYear;
       AppState.config.carriedMaxVacations = maxVac;
       AppState.config.carriedMaxDci = maxDci;
+      AppState.config.carriedMaxDan = maxDan;
 
       modalRollover?.classList.add("hidden");
       syncConfigInputsFromState();
       updateAll();
       triggerSave(true);
-      showToast(`¡Traspaso de remanente de ${targetPrevYear} aplicado con éxito (+${vacVal}d Vacaciones, +${dciVal}d DCI)!`, "success");
+      const danSignToast = danVal > 0 ? `+${danVal.toFixed(1)}` : `${danVal.toFixed(1)}`;
+      showToast(`¡Traspaso de remanente de ${targetPrevYear} aplicado con éxito (+${vacVal}d Vacaciones, +${dciVal}d DCI, ${danSignToast}h DAN)!`, "success");
     });
   }
 
