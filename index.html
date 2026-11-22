@@ -313,6 +313,24 @@
                   </select>
                 </div>
               </div>
+
+              <!-- Permisos arrastrados del año anterior (Opcional para nuevos usuarios) -->
+              <div class="mt-2.5 pt-2.5 border-t border-slate-200/80">
+                <span class="block font-bold text-slate-700 text-[11px] mb-1.5 flex items-center gap-1">
+                  <span class="text-amber-500">✨</span>
+                  <span>Permisos arrastrados del año anterior (opcional)</span>
+                </span>
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <label class="block text-slate-600 text-[10px] font-semibold mb-0.5" for="reg-vac-carried">Vacaciones arrastradas</label>
+                    <input type="number" id="reg-vac-carried" step="0.5" min="0" max="30" value="0" class="w-full px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium text-xs" />
+                  </div>
+                  <div>
+                    <label class="block text-slate-600 text-[10px] font-semibold mb-0.5" for="reg-dci-carried">DCI arrastrados</label>
+                    <input type="number" id="reg-dci-carried" step="1" min="0" max="15" value="0" class="w-full px-2 py-1 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium text-xs" />
+                  </div>
+                </div>
+              </div>
             </div>
 
             <button type="submit" id="btn-submit-register" class="w-full mt-2 py-2.5 px-4 bg-emerald-700 hover:bg-emerald-800 active:scale-[0.99] text-white text-xs font-bold rounded-xl shadow-md shadow-emerald-900/10 transition-all flex items-center justify-center gap-2 cursor-pointer">
@@ -409,6 +427,41 @@
             <div>
               <label class="block font-semibold text-slate-700 mb-1" for="edit-base-hours">Jornada Anual Base (h)</label>
               <input type="number" id="edit-base-hours" step="1" min="100" max="2500" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" />
+            </div>
+          </div>
+
+          <!-- Permisos arrastrados del año anterior (SAS) -->
+          <div class="pt-3 border-t border-slate-200 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block font-bold text-slate-800 text-xs flex items-center gap-1.5">
+                <span class="text-amber-500">✨</span>
+                <span>Permisos arrastrados del ejercicio anterior</span>
+              </label>
+              <span class="text-[10px] text-slate-400">Opcional</span>
+            </div>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="edit-vac-carried">
+                  Vacaciones arrastradas (año anterior)
+                </label>
+                <input type="number" id="edit-vac-carried" step="0.5" min="0" max="30" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" placeholder="0 días (hasta 15 ene)" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block">Disfrute preferente: 1 al 15 de enero</span>
+              </div>
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="edit-dci-carried">
+                  DCI arrastrados (año anterior)
+                </label>
+                <input type="number" id="edit-dci-carried" step="1" min="0" max="15" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-medium" placeholder="0 días (hasta 31 ene)" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block">Disfrute preferente: 1 al 31 de enero</span>
+              </div>
+            </div>
+
+            <div class="mt-2 p-2.5 rounded-xl bg-amber-50/70 border border-amber-200/70">
+              <label class="inline-flex items-start gap-2 text-[11px] text-amber-950 cursor-pointer select-none">
+                <input type="checkbox" id="edit-carried-justified" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 accent-amber-600 cursor-pointer shrink-0" />
+                <span><strong>Tengo causa justificada para ampliar el plazo</strong> (Baja médica / Maternidad / Paternidad / Denegación por escrito del SAS). Desactiva la caducidad de enero.</span>
+              </label>
             </div>
           </div>
 
@@ -575,6 +628,113 @@
         <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
           <button type="button" id="btn-modal-sat-done" class="w-full sm:w-auto px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors cursor-pointer text-center">
             Listo / Cerrar
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
+    <!-- MODAL TRASPASO DE REMANENTE DEL AÑO ANTERIOR (SAS)            -->
+    <!-- ============================================================== -->
+    <div id="rollover-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs hidden no-print transition-opacity">
+      <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-5 sm:p-6 border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Cabecera del Modal -->
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+              <span class="text-xl leading-none">✨</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900" id="rollover-modal-title">Traspaso de Remanente de Permisos</h3>
+              <p class="text-xs text-slate-500">Cómputo oficial SAS de días sobrantes y control anti-trampas</p>
+            </div>
+          </div>
+          <button type="button" id="btn-close-rollover-modal" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Cuerpo del Modal -->
+        <div class="overflow-y-auto space-y-3.5 pr-1 text-xs">
+          
+          <!-- Banner Informativo Normativo -->
+          <div class="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-amber-950 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-amber-900">
+              <svg class="w-4 h-4 text-amber-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Plazos de Caducidad Oficiales SAS en Enero</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-amber-900/90">
+              El SAS permite disfrutar el remanente no consumido del año anterior durante el mes de enero: <strong>Vacaciones hasta el 15 de enero</strong> y <strong>Días DCI hasta el 31 de enero</strong>. A partir de esas fechas, los días no disfrutados caducan automáticamente, salvo causa legal justificada.
+            </p>
+          </div>
+
+          <!-- Resumen de Auditoría del Año Anterior -->
+          <div class="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
+            <span class="font-bold text-slate-800 text-xs block" id="rollover-audit-header">
+              Auditoría del ejercicio anterior
+            </span>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200/80">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">DCI sobrantes</span>
+                <span class="text-base font-black text-purple-700 block mt-0.5" id="rollover-audit-dci-val">0 días</span>
+                <span class="text-[10px] text-slate-500 block">Disfrutables hasta el 31 de enero</span>
+              </div>
+              <div class="bg-white p-2.5 rounded-lg border border-slate-200/80">
+                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Vacaciones sobrantes</span>
+                <span class="text-base font-black text-emerald-700 block mt-0.5" id="rollover-audit-vac-val">0 días</span>
+                <span class="text-[10px] text-slate-500 block">Disfrutables hasta el 15 de enero</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Campos de Traspaso con Límite Máximo Anti-Trampas -->
+          <div class="space-y-2.5 pt-1">
+            <span class="font-bold text-slate-700 uppercase tracking-wider text-[10px] block">Días a traspasar a este ejercicio</span>
+            
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="rollover-vac-input">
+                  Vacaciones a traspasar:
+                </label>
+                <input type="number" id="rollover-vac-input" step="0.5" min="0" max="0" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold text-slate-800" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-vac-max-hint">Máx. permitido: 0 días</span>
+              </div>
+
+              <div>
+                <label class="block font-semibold text-slate-700 mb-1" for="rollover-dci-input">
+                  DCI a traspasar:
+                </label>
+                <input type="number" id="rollover-dci-input" step="1" min="0" max="0" value="0" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 focus:border-emerald-600 focus:ring-1 focus:ring-emerald-600 outline-none font-bold text-slate-800" />
+                <span class="text-[10px] text-slate-500 mt-0.5 block" id="rollover-dci-max-hint">Máx. permitido: 0 días</span>
+              </div>
+            </div>
+
+            <!-- Aviso Anti-Trampas -->
+            <div class="p-2.5 rounded-lg bg-slate-100 border border-slate-200/90 text-[11px] text-slate-600 flex items-start gap-2">
+              <span class="text-slate-500 font-bold shrink-0">🛡️</span>
+              <span><strong>Control anti-trampas:</strong> Puedes confirmar o reducir la cifra si renunciaste a días, pero no es posible superar el remanente real auditado del ejercicio anterior.</span>
+            </div>
+
+            <!-- Casilla de Causa Justificada -->
+            <div class="p-3 rounded-xl bg-amber-50/70 border border-amber-200/70">
+              <label class="inline-flex items-start gap-2 text-[11px] text-amber-950 cursor-pointer select-none">
+                <input type="checkbox" id="rollover-justified-check" class="mt-0.5 rounded text-amber-600 focus:ring-amber-500 accent-amber-600 cursor-pointer shrink-0" />
+                <span><strong>Tengo causa justificada para ampliar el plazo</strong> (Baja médica / Maternidad / Paternidad / Denegación por escrito del SAS). Desactiva la caducidad automática de enero para disfrutar estos días durante todo el año.</span>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Pie del Modal -->
+        <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
+          <button type="button" id="btn-cancel-rollover-modal" class="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors cursor-pointer">
+            Cancelar
+          </button>
+          <button type="button" id="btn-apply-rollover" class="px-5 py-2 text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 rounded-xl shadow-xs transition-all cursor-pointer flex items-center gap-1.5">
+            <span>Confirmar y Aplicar Traspaso</span>
           </button>
         </div>
 
@@ -779,6 +939,7 @@
           </div>
           <div class="my-0.5">
             <span id="kpi-vac-value" class="text-xl sm:text-2xl font-black tracking-tight text-slate-900 block">0 / 0 días</span>
+            <p id="kpi-vac-extra" class="text-[10px] font-bold text-amber-700 mt-0.5 hidden"></p>
             <p id="kpi-vac-label" class="hidden"></p>
           </div>
           <div class="pt-2 border-t border-slate-100/60 text-[10px] sm:text-[11px] text-slate-500 flex items-center justify-between min-h-[25px]">
@@ -866,6 +1027,25 @@
               </div>
               <button type="button" id="cal-btn-next" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer select-none" title="Mes Siguiente">
                 <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+              </button>
+            </div>
+
+            <!-- Botón de Traspaso Automático de Remanente en Enero -->
+            <div id="rollover-action-container" class="hidden">
+              <button type="button" id="btn-open-rollover-modal" class="w-full text-left p-2 sm:px-3 sm:py-2 rounded-xl border border-amber-400 bg-gradient-to-r from-amber-50 via-amber-100/80 to-amber-50 hover:from-amber-100 hover:to-amber-200 text-amber-950 shadow-xs transition-all cursor-pointer select-none flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 font-bold text-xs">
+                  <span class="text-amber-600 font-black text-sm animate-bounce">✨</span>
+                  <span id="btn-rollover-modal-label">Traspasar remanente del año anterior</span>
+                </div>
+                <span class="text-[10px] text-amber-900 font-bold bg-amber-200/90 px-2 py-0.5 rounded-full border border-amber-300 shrink-0">Auditar y Traspasar &rarr;</span>
+              </button>
+
+              <button type="button" id="btn-open-rollover-applied" class="w-full text-left p-2 sm:px-3 sm:py-1.5 rounded-xl border border-emerald-300/80 bg-emerald-50/80 hover:bg-emerald-100/90 text-emerald-950 shadow-2xs transition-all cursor-pointer select-none hidden flex items-center justify-between gap-2 text-xs">
+                <div class="flex items-center gap-1.5 font-semibold text-xs text-emerald-900">
+                  <span class="text-emerald-600 font-bold">✓</span>
+                  <span id="btn-rollover-applied-label">Remanente aplicado</span>
+                </div>
+                <span class="text-[10px] text-emerald-800 underline font-semibold shrink-0">Revisar</span>
               </button>
             </div>
 
@@ -1223,6 +1403,51 @@
                   <span>Consultar Criterios de Compensación de Festivos en el Manual de Licencias del SAS</span>
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
                 </a>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bloque 6: Plazos de Disfrute en Enero del Remanente y Excepciones Legales -->
+          <div class="p-4 rounded-xl bg-slate-50 border border-slate-200">
+            <h4 class="font-bold text-slate-900 text-xs uppercase tracking-wide mb-2 flex items-center gap-2">
+              <span class="w-2 h-2 rounded-full bg-amber-600"></span>
+              <span>6. Plazos de Disfrute del Remanente en Enero y Excepciones Legales</span>
+            </h4>
+            <div class="space-y-3 text-xs">
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2">
+                  <span class="font-semibold text-slate-800">Caducidad Oficial SAS del Ejercicio Anterior:</span>
+                  <span class="text-[10px] font-mono bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-bold">Instrucción SAS / Mesa Sectorial</span>
+                </div>
+                <p class="text-slate-600 leading-relaxed">
+                  Conforme a la normativa del SAS y el Estatuto Marco, los días no disfrutados del año anterior pueden prorrogarse en enero con plazos estrictos:
+                </p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                  <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
+                    <div class="font-bold text-amber-900 flex items-center gap-1.5">
+                      <span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black">📅 Vacaciones del año anterior (Hasta 15 de enero)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Las vacaciones arrastradas deben disfrutarse prioritariamente entre el <strong>1 y el 15 de enero</strong>. A partir del 16 de enero, los días de vacaciones del año anterior que no hayan sido disfrutados <strong>caducan automáticamente</strong> y dejan de computar en la bolsa, salvo causa legal justificada.
+                    </p>
+                  </div>
+                  <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
+                    <div class="font-bold text-purple-900 flex items-center gap-1.5">
+                      <span class="text-xs bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-black">📅 Días DCI del año anterior (Hasta 31 de enero)</span>
+                    </div>
+                    <p class="text-[11px] text-slate-600 leading-relaxed">
+                      Los días DCI arrastrados deben disfrutarse prioritariamente hasta el <strong>31 de enero</strong>. A partir del 1 de febrero, los días DCI sobrantes del año anterior <strong>caducan automáticamente</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="p-3 bg-amber-50/70 border border-amber-200/80 rounded-lg text-amber-950 space-y-1">
+                <span class="font-bold text-amber-900 flex items-center gap-1.5 text-xs">
+                  <span>⚖️ Ampliación por Causa Justificada (Excepción Legal)</span>
+                </span>
+                <p class="text-[11px] leading-relaxed text-amber-900/90">
+                  Si no pudiste disfrutar tus vacaciones o DCI dentro del plazo ordinario por <strong>Incapacidad Temporal (Baja Médica), Permiso por Maternidad/Paternidad o denegación motivada por necesidades del servicio por escrito del SAS</strong>, puedes activar la casilla de causa justificada en el traspaso o parámetros. Esto desactiva la caducidad automática de enero y permite su disfrute a lo largo de todo el año.
+                </p>
               </div>
             </div>
           </div>

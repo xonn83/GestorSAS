@@ -89,7 +89,13 @@ export const AppState = {
     hoursDCI: 7.0,
     annualVacationDays: 22.0,
     annualLdDays: 6.0,
-    proposedDates: ""
+    proposedDates: "",
+    vacationsCarried: 0,
+    dciCarried: 0,
+    carriedJustified: false,
+    carriedFromYear: 0,
+    carriedMaxVacations: null,
+    carriedMaxDci: null
   },
   calendarYear: currentYear,
   calendarMonth: currentMonth,
@@ -762,6 +768,126 @@ export function openHolidaySaturdaysModal() {
   modal.classList.remove("hidden");
 }
 
+export function getPreviousYearAudit(prevYear = AppState.calendarYear - 1) {
+  const yearDays = getDaysInYear(prevYear);
+  const contractDays = getContractDaysTotal(prevYear);
+  const annualBaseVac = parseFloat(AppState.config.annualVacationDays) || 22.0;
+  const annualBaseDci = parseFloat(AppState.config.annualLdDays || AppState.config.annualDciDays) || 6.0;
+
+  let baseVacationDays = 0;
+  let baseDciDays = 0;
+  if (contractDays === 0) {
+    baseVacationDays = annualBaseVac;
+    baseDciDays = annualBaseDci;
+  } else if (contractDays < yearDays && yearDays > 0) {
+    baseVacationDays = Math.ceil(((annualBaseVac * contractDays) / yearDays) * 2) / 2;
+    baseDciDays = Math.min(annualBaseDci, Math.round((annualBaseDci * contractDays) / yearDays));
+  } else {
+    baseVacationDays = annualBaseVac;
+    baseDciDays = annualBaseDci;
+  }
+
+  const dciExceptions = getDciExceptions(prevYear);
+  const totalEntitledVac = baseVacationDays;
+  const totalEntitledDci = baseDciDays + dciExceptions.totalExtraDays;
+
+  let vConsumed = 0;
+  let dciConsumed = 0;
+  let totalShifts = 0;
+
+  const prefix = `${prevYear}-`;
+  if (AppState.calendarShifts) {
+    for (const [dateStr, shift] of Object.entries(AppState.calendarShifts)) {
+      if (dateStr.startsWith(prefix) && shift) {
+        totalShifts++;
+        if (shift === "V") {
+          vConsumed++;
+        } else if (shift === "DCI" || shift === "LD") {
+          dciConsumed++;
+        }
+      }
+    }
+  }
+
+  const hasHistory = totalShifts > 0 || contractDays > 0;
+  const remainingVac = Math.max(0, parseFloat((totalEntitledVac - vConsumed).toFixed(1)));
+  const remainingDci = Math.max(0, Math.round(totalEntitledDci - dciConsumed));
+
+  return {
+    prevYear,
+    hasHistory,
+    totalShifts,
+    totalEntitledVac,
+    totalEntitledDci,
+    vConsumed,
+    dciConsumed,
+    remainingVac,
+    remainingDci
+  };
+}
+
+export function openRolloverModal(targetYear = AppState.calendarYear - 1) {
+  const modal = document.getElementById("rollover-modal");
+  if (!modal) return;
+
+  const prevAudit = getPreviousYearAudit(targetYear);
+  const modalTitle = document.getElementById("rollover-modal-title");
+  const auditHeader = document.getElementById("rollover-audit-header");
+  const auditDciVal = document.getElementById("rollover-audit-dci-val");
+  const auditVacVal = document.getElementById("rollover-audit-vac-val");
+  const vacInput = document.getElementById("rollover-vac-input");
+  const dciInput = document.getElementById("rollover-dci-input");
+  const vacMaxHint = document.getElementById("rollover-vac-max-hint");
+  const dciMaxHint = document.getElementById("rollover-dci-max-hint");
+  const justifiedCheck = document.getElementById("rollover-justified-check");
+
+  if (modalTitle) {
+    modalTitle.textContent = `Traspaso de Remanente de Permisos (${targetYear} → ${AppState.calendarYear})`;
+  }
+  if (auditHeader) {
+    auditHeader.textContent = `Auditoría del ejercicio anterior (${targetYear})`;
+  }
+  if (auditDciVal) {
+    auditDciVal.textContent = `${prevAudit.remainingDci} días`;
+  }
+  if (auditVacVal) {
+    auditVacVal.textContent = `${prevAudit.remainingVac} días`;
+  }
+
+  const maxVac = prevAudit.remainingVac;
+  const maxDci = prevAudit.remainingDci;
+
+  if (vacInput) {
+    vacInput.max = maxVac;
+    vacInput.min = 0;
+    const curVal = AppState.config.carriedFromYear === targetYear && AppState.config.vacationsCarried !== undefined
+      ? AppState.config.vacationsCarried
+      : maxVac;
+    vacInput.value = Math.min(maxVac, curVal);
+  }
+  if (vacMaxHint) {
+    vacMaxHint.textContent = `Máx. permitido: ${maxVac} días (auditado en ${targetYear})`;
+  }
+
+  if (dciInput) {
+    dciInput.max = maxDci;
+    dciInput.min = 0;
+    const curVal = AppState.config.carriedFromYear === targetYear && AppState.config.dciCarried !== undefined
+      ? AppState.config.dciCarried
+      : maxDci;
+    dciInput.value = Math.min(maxDci, curVal);
+  }
+  if (dciMaxHint) {
+    dciMaxHint.textContent = `Máx. permitido: ${maxDci} días (auditado en ${targetYear})`;
+  }
+
+  if (justifiedCheck) {
+    justifiedCheck.checked = !!AppState.config.carriedJustified;
+  }
+
+  modal.classList.remove("hidden");
+}
+
 export function getMonthPermissionDays(year, month) {
   const row = AppState.monthlyTableData ? AppState.monthlyTableData[month] : null;
   if (row && typeof row.vacaciones === "number" && typeof row.moscosos === "number") {
@@ -1135,6 +1261,12 @@ export async function flushCloudSave() {
       hoursLD: parseFloat(AppState.config.hoursLD) || 7.0,
       hoursDCI: parseFloat(AppState.config.hoursDCI) || 7.0,
       proposedDates: AppState.config.proposedDates || "",
+      vacationsCarried: parseFloat(AppState.config.vacationsCarried) || 0,
+      dciCarried: parseInt(AppState.config.dciCarried) || 0,
+      carriedJustified: !!AppState.config.carriedJustified,
+      carriedFromYear: parseInt(AppState.config.carriedFromYear) || 0,
+      carriedMaxVacations: AppState.config.carriedMaxVacations !== null && AppState.config.carriedMaxVacations !== undefined ? parseFloat(AppState.config.carriedMaxVacations) : null,
+      carriedMaxDci: AppState.config.carriedMaxDci !== null && AppState.config.carriedMaxDci !== undefined ? parseInt(AppState.config.carriedMaxDci) : null,
       calendarShifts: AppState.calendarShifts || {},
       holidaySaturdays: AppState.holidaySaturdays || {},
       monthlyTableData: AppState.monthlyTableData,
@@ -1247,6 +1379,12 @@ export async function loadUserData(user) {
       if (cData.monthlyTableData) AppState.monthlyTableData = cData.monthlyTableData;
       if (cData.calendarYear) AppState.calendarYear = cData.calendarYear;
       if (cData.proposedDates) AppState.config.proposedDates = cData.proposedDates;
+      if (cData.vacationsCarried !== undefined) AppState.config.vacationsCarried = parseFloat(cData.vacationsCarried) || 0;
+      if (cData.dciCarried !== undefined) AppState.config.dciCarried = parseInt(cData.dciCarried) || 0;
+      if (cData.carriedJustified !== undefined) AppState.config.carriedJustified = !!cData.carriedJustified;
+      if (cData.carriedFromYear !== undefined) AppState.config.carriedFromYear = parseInt(cData.carriedFromYear) || 0;
+      if (cData.carriedMaxVacations !== undefined) AppState.config.carriedMaxVacations = cData.carriedMaxVacations;
+      if (cData.carriedMaxDci !== undefined) AppState.config.carriedMaxDci = cData.carriedMaxDci;
     } else {
       // Nuevo usuario registrado: cuadrante limpio listo para su uso
       AppState.calendarShifts = {};
@@ -1351,8 +1489,6 @@ export function getAccumulatedMetrics() {
 
   // Excepciones normativas SAS (Sábados festivos y 24/31 dic en fin de semana)
   const dciExceptions = getDciExceptions(year);
-  const totalVacationDays = baseVacationDays;
-  const totalDciDays = baseDciDays + dciExceptions.totalExtraDays;
 
   let totalActiveDaysInYear = 0;
   let totalWorkedAllYear = 0;
@@ -1395,6 +1531,64 @@ export function getAccumulatedMetrics() {
       lastFilledMonth = m;
     }
   });
+
+  // Permisos arrastrados del ejercicio anterior (Normativa SAS)
+  const vacCarriedConfig = parseFloat(AppState.config.vacationsCarried) || 0;
+  const dciCarriedConfig = parseInt(AppState.config.dciCarried) || 0;
+  const carriedJustified = !!AppState.config.carriedJustified;
+
+  // Conteo de Vacaciones consumidas entre el 1 y el 15 de enero en calendarShifts
+  let vInJan1to15 = 0;
+  let dciInJanTotal = 0;
+  if (AppState.calendarShifts) {
+    for (let day = 1; day <= 15; day++) {
+      const dStr = formatISODate(year, 0, day);
+      if (AppState.calendarShifts[dStr] === "V") {
+        vInJan1to15++;
+      }
+    }
+    for (let day = 1; day <= 31; day++) {
+      const dStr = formatISODate(year, 0, day);
+      const sh = AppState.calendarShifts[dStr];
+      if (sh === "DCI" || sh === "LD") {
+        dciInJanTotal++;
+      }
+    }
+  }
+
+  // Reglas de consumo prioritario y caducidad oficial SAS:
+  // 1. Vacaciones arrastradas (disfrute preferente 1 al 15 de enero)
+  let consumedCarriedVac = 0;
+  let expiredCarriedVac = 0;
+  let effectiveCarriedVac = 0;
+
+  if (carriedJustified) {
+    consumedCarriedVac = Math.min(vacCarriedConfig, totalVacationConsumedDays);
+    expiredCarriedVac = 0;
+    effectiveCarriedVac = vacCarriedConfig;
+  } else {
+    consumedCarriedVac = Math.min(vacCarriedConfig, vInJan1to15);
+    expiredCarriedVac = Math.max(0, vacCarriedConfig - consumedCarriedVac);
+    effectiveCarriedVac = consumedCarriedVac;
+  }
+
+  // 2. DCI arrastrados (disfrute preferente 1 al 31 de enero)
+  let consumedCarriedDci = 0;
+  let expiredCarriedDci = 0;
+  let effectiveCarriedDci = 0;
+
+  if (carriedJustified) {
+    consumedCarriedDci = Math.min(dciCarriedConfig, totalDciConsumedDays);
+    expiredCarriedDci = 0;
+    effectiveCarriedDci = dciCarriedConfig;
+  } else {
+    consumedCarriedDci = Math.min(dciCarriedConfig, dciInJanTotal);
+    expiredCarriedDci = Math.max(0, dciCarriedConfig - consumedCarriedDci);
+    effectiveCarriedDci = consumedCarriedDci;
+  }
+
+  const totalVacationDays = baseVacationDays + effectiveCarriedVac;
+  const totalDciDays = baseDciDays + dciExceptions.totalExtraDays + effectiveCarriedDci;
 
   // Paso 2: Corte de auditoría a mitad de año (Tarjeta 1 de Exceso de Jornada DAJ):
   // Compara únicamente los meses desde el inicio del nombramiento hasta el último mes registrado (lastFilledMonth),
@@ -1483,6 +1677,18 @@ export function getAccumulatedMetrics() {
     dciRemainderHours: dajRemainderHours,
     dciExactDays: dajExactDays,
     // Bolsa Vacaciones
+    baseVacationDays,
+    vacCarriedConfig,
+    dciCarriedConfig,
+    carriedJustified,
+    vInJan1to15,
+    dciInJanTotal,
+    consumedCarriedVac,
+    expiredCarriedVac,
+    effectiveCarriedVac,
+    consumedCarriedDci,
+    expiredCarriedDci,
+    effectiveCarriedDci,
     totalVacationDays,
     totalVacationConsumedDays,
     remainingVacationDays,
@@ -1556,8 +1762,30 @@ function renderKpis() {
   const vacLabelEl = document.getElementById("kpi-vac-label");
   const vacBadgeEl = document.getElementById("kpi-vac-badge");
   const vacSubEl = document.getElementById("kpi-vac-sub");
+  const vacExtraEl = document.getElementById("kpi-vac-extra");
 
   const isVacExceeded = metrics.totalVacationConsumedDays > metrics.totalVacationDays;
+
+  // Desglose transparente de vacaciones arrastradas
+  if (vacExtraEl) {
+    if (metrics.vacCarriedConfig > 0) {
+      const parts = [`Base: ${metrics.baseVacationDays}d`];
+      if (metrics.effectiveCarriedVac > 0) {
+        parts.push(`+ ${metrics.effectiveCarriedVac}d año ant.`);
+      }
+      if (metrics.expiredCarriedVac > 0) {
+        parts.push(`(${metrics.expiredCarriedVac}d caducados 15 ene)`);
+      }
+      if (metrics.carriedJustified) {
+        parts.push(`[Plazo ampliado]`);
+      }
+      vacExtraEl.textContent = parts.join(" ");
+      vacExtraEl.className = "text-[10px] font-bold text-amber-700 mt-0.5 block";
+    } else {
+      vacExtraEl.className = "hidden";
+      vacExtraEl.textContent = "";
+    }
+  }
 
   if (isVacExceeded) {
     if (cardVacEl) {
@@ -1614,13 +1842,23 @@ function renderKpis() {
 
   // Desglose transparente de días DCI adicionales
   if (ldExtraEl) {
-    if (metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) {
+    const hasExtras = (metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) || (metrics.dciCarriedConfig > 0);
+    if (hasExtras) {
       const parts = [`Base: ${metrics.baseDciDays}d`];
-      if (metrics.dciExceptions.saturdayHolidayDays > 0) {
+      if (metrics.dciExceptions && metrics.dciExceptions.saturdayHolidayDays > 0) {
         parts.push(`+ ${metrics.dciExceptions.saturdayHolidayDays}d Sáb. festivo`);
       }
-      if (metrics.dciExceptions.decWeekendDays > 0) {
+      if (metrics.dciExceptions && metrics.dciExceptions.decWeekendDays > 0) {
         parts.push(`+ ${metrics.dciExceptions.decWeekendDays}d 24/31 Dic.`);
+      }
+      if (metrics.effectiveCarriedDci > 0) {
+        parts.push(`+ ${metrics.effectiveCarriedDci}d año ant.`);
+      }
+      if (metrics.expiredCarriedDci > 0) {
+        parts.push(`(${metrics.expiredCarriedDci}d caducados 31 ene)`);
+      }
+      if (metrics.dciCarriedConfig > 0 && metrics.carriedJustified) {
+        parts.push(`[Plazo ampliado]`);
       }
       ldExtraEl.textContent = parts.join(" ");
       ldExtraEl.className = "text-[10px] font-bold text-purple-700 mt-0.5 block";
@@ -1716,6 +1954,46 @@ function renderCalendar() {
       } else {
         calSatDetails.textContent = `2 festivos locales marcados · Tope (2/2) completado`;
       }
+    }
+  }
+
+  // Gestión de botón de traspaso de remanente en Enero
+  const rolloverContainer = document.getElementById("rollover-action-container");
+  const btnRolloverModal = document.getElementById("btn-open-rollover-modal");
+  const btnRolloverApplied = document.getElementById("btn-open-rollover-applied");
+  const btnRolloverLabel = document.getElementById("btn-rollover-modal-label");
+  const btnRolloverAppliedLabel = document.getElementById("btn-rollover-applied-label");
+
+  if (rolloverContainer) {
+    if (month === 0) {
+      const prevYear = year - 1;
+      const prevAudit = getPreviousYearAudit(prevYear);
+      const isAlreadyApplied = (AppState.config.carriedFromYear === prevYear) || (AppState.config.vacationsCarried > 0 || AppState.config.dciCarried > 0);
+
+      if (prevAudit.hasHistory && (prevAudit.remainingVac > 0 || prevAudit.remainingDci > 0 || isAlreadyApplied)) {
+        rolloverContainer.classList.remove("hidden");
+        if (isAlreadyApplied) {
+          if (btnRolloverModal) btnRolloverModal.classList.add("hidden");
+          if (btnRolloverApplied) {
+            btnRolloverApplied.classList.remove("hidden");
+            if (btnRolloverAppliedLabel) {
+              btnRolloverAppliedLabel.textContent = `Remanente ${prevYear} aplicado (${AppState.config.vacationsCarried || 0}V, ${AppState.config.dciCarried || 0}DCI)`;
+            }
+          }
+        } else {
+          if (btnRolloverApplied) btnRolloverApplied.classList.add("hidden");
+          if (btnRolloverModal) {
+            btnRolloverModal.classList.remove("hidden");
+            if (btnRolloverLabel) {
+              btnRolloverLabel.textContent = `✨ Traspasar remanente ${prevYear} (${prevAudit.remainingVac}V / ${prevAudit.remainingDci}DCI)`;
+            }
+          }
+        }
+      } else {
+        rolloverContainer.classList.add("hidden");
+      }
+    } else {
+      rolloverContainer.classList.add("hidden");
     }
   }
 
@@ -2003,19 +2281,39 @@ function applyBrushToDate(dateStr) {
     return;
   }
 
-  // 4.1 Control y aviso de límite en Vacaciones y DCI
+  // 4.1 Control y aviso de límite en Vacaciones y DCI con plazos de caducidad oficiales SAS
   if (newShiftValue === "V" && currentShift !== "V") {
     const currentMetrics = getAccumulatedMetrics();
-    if (currentMetrics.totalVacationConsumedDays >= currentMetrics.totalVacationDays) {
-      showToast(`Has alcanzado el límite de días de Vacaciones (${currentMetrics.totalVacationDays}/${currentMetrics.totalVacationDays} d) correspondientes a este nombramiento.`, "warning");
+    const isJan1to15 = (d.getMonth() === 0 && d.getDate() <= 15);
+    const justified = !!AppState.config.carriedJustified;
+    const allowedMax = (isJan1to15 || justified)
+      ? (currentMetrics.baseVacationDays + currentMetrics.vacCarriedConfig)
+      : currentMetrics.totalVacationDays;
+
+    if (currentMetrics.totalVacationConsumedDays >= allowedMax) {
+      if (!justified && currentMetrics.expiredCarriedVac > 0 && !isJan1to15) {
+        showToast(`Las vacaciones del año anterior caducaron el 15 de enero según la normativa del SAS (salvo causa justificada). Límite disponible: ${currentMetrics.totalVacationDays} días.`, "warning");
+      } else {
+        showToast(`Has alcanzado el límite de días de Vacaciones (${currentMetrics.totalVacationDays}/${currentMetrics.totalVacationDays} d) correspondientes a este nombramiento.`, "warning");
+      }
       return;
     }
   }
 
   if ((newShiftValue === "DCI" || newShiftValue === "LD") && currentShift !== "DCI" && currentShift !== "LD") {
     const currentMetrics = getAccumulatedMetrics();
-    if (currentMetrics.totalDciConsumedDays >= currentMetrics.totalDciDays) {
-      showToast(`Has alcanzado el límite de días DCI (${currentMetrics.totalDciDays}/${currentMetrics.totalDciDays} d) correspondientes a este nombramiento.`, "warning");
+    const isJan = (d.getMonth() === 0);
+    const justified = !!AppState.config.carriedJustified;
+    const allowedMax = (isJan || justified)
+      ? (currentMetrics.baseDciDays + (currentMetrics.dciExceptions ? currentMetrics.dciExceptions.totalExtraDays : 0) + currentMetrics.dciCarriedConfig)
+      : currentMetrics.totalDciDays;
+
+    if (currentMetrics.totalDciConsumedDays >= allowedMax) {
+      if (!justified && currentMetrics.expiredCarriedDci > 0 && !isJan) {
+        showToast(`Los días DCI del año anterior caducaron el 31 de enero según la normativa del SAS (salvo causa justificada). Límite disponible: ${currentMetrics.totalDciDays} días.`, "warning");
+      } else {
+        showToast(`Has alcanzado el límite de días DCI (${currentMetrics.totalDciDays}/${currentMetrics.totalDciDays} d) correspondientes a este nombramiento.`, "warning");
+      }
       return;
     }
   }
@@ -2572,6 +2870,21 @@ export function syncEditModalInputsFromState() {
 
   setVal("edit-regime", AppState.config.regime);
   setVal("edit-base-hours", AppState.config.baseHours);
+
+  setVal("edit-vac-carried", AppState.config.vacationsCarried || 0);
+  setVal("edit-dci-carried", AppState.config.dciCarried || 0);
+  const chkJustified = document.getElementById("edit-carried-justified");
+  if (chkJustified) {
+    chkJustified.checked = !!AppState.config.carriedJustified;
+  }
+  const editVacCarriedInput = document.getElementById("edit-vac-carried");
+  const editDciCarriedInput = document.getElementById("edit-dci-carried");
+  if (AppState.config.carriedMaxVacations !== null && AppState.config.carriedMaxVacations !== undefined && editVacCarriedInput) {
+    editVacCarriedInput.max = AppState.config.carriedMaxVacations;
+  }
+  if (AppState.config.carriedMaxDci !== null && AppState.config.carriedMaxDci !== undefined && editDciCarriedInput) {
+    editDciCarriedInput.max = AppState.config.carriedMaxDci;
+  }
 }
 
 export function cargarDatosEjemplo(showNotification = true) {
@@ -2790,9 +3103,9 @@ export function exportarPDF() {
 
   const vacColor = isVacExceeded ? [185, 28, 28] : [15, 23, 42];
   const vacBg = isVacExceeded ? [254, 242, 242] : [248, 250, 252];
-  const vacSub = isVacExceeded
+  let vacSub = isVacExceeded
     ? `⚠️ +${(metrics.totalVacationConsumedDays - metrics.totalVacationDays).toFixed(1)} d sobre cupo`
-    : "Días pendientes / Totales año";
+    : (metrics.effectiveCarriedVac > 0 ? `Base: ${metrics.baseVacationDays}d +${metrics.effectiveCarriedVac}d ant.` : "Días pendientes / Totales año");
 
   const dciColor = isDciExceeded ? [185, 28, 28] : [88, 28, 135];
   const dciBg = isDciExceeded ? [254, 242, 242] : [250, 245, 255];
@@ -2800,13 +3113,16 @@ export function exportarPDF() {
     ? `⚠️ +${(metrics.totalDciConsumedDays - metrics.totalDciDays).toFixed(1)} d sobre cupo`
     : "Días pendientes / Totales año";
   let dciSub2 = `${metrics.totalDciConsumedDays} d disfrutados`;
-  if (!isDciExceeded && metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) {
+  if (!isDciExceeded && ((metrics.dciExceptions && metrics.dciExceptions.totalExtraDays > 0) || metrics.effectiveCarriedDci > 0)) {
     const extraParts = [`Base: ${metrics.baseDciDays}d`];
-    if (metrics.dciExceptions.saturdayHolidayDays > 0) {
+    if (metrics.dciExceptions && metrics.dciExceptions.saturdayHolidayDays > 0) {
       extraParts.push(`+${metrics.dciExceptions.saturdayHolidayDays}d Sáb.`);
     }
-    if (metrics.dciExceptions.decWeekendDays > 0) {
+    if (metrics.dciExceptions && metrics.dciExceptions.decWeekendDays > 0) {
       extraParts.push(`+${metrics.dciExceptions.decWeekendDays}d 24/31D`);
+    }
+    if (metrics.effectiveCarriedDci > 0) {
+      extraParts.push(`+${metrics.effectiveCarriedDci}d ant.`);
     }
     dciSub = extraParts.join(" ");
   }
@@ -3573,6 +3889,12 @@ function initApp() {
         AppState.config.regime = regime;
         AppState.config.baseHours = baseHours;
 
+        const regVacCarried = parseFloat(document.getElementById("reg-vac-carried")?.value) || 0;
+        const regDciCarried = parseInt(document.getElementById("reg-dci-carried")?.value) || 0;
+        AppState.config.vacationsCarried = regVacCarried;
+        AppState.config.dciCarried = regDciCarried;
+        AppState.config.carriedJustified = false;
+
         const uid = user ? user.uid : ("usr_" + Math.random().toString(36).substring(2, 10));
         const accountData = {
           uid: uid,
@@ -3586,7 +3908,10 @@ function initApp() {
           startDate: startDate,
           endDate: endDate,
           regime: regime,
-          baseHours: baseHours
+          baseHours: baseHours,
+          vacationsCarried: regVacCarried,
+          dciCarried: regDciCarried,
+          carriedJustified: false
         };
         saveLocalAccount(accountData);
 
@@ -3643,6 +3968,9 @@ function initApp() {
                 hoursLD: 7.0,
                 hoursDCI: 7.0,
                 proposedDates: "",
+                vacationsCarried: regVacCarried,
+                dciCarried: regDciCarried,
+                carriedJustified: false,
                 calendarShifts: {},
                 monthlyTableData: Array.from({ length: 12 }, (_, i) => ({
                   month: i,
@@ -3786,6 +4114,28 @@ function initApp() {
       AppState.config.endDate = endDate;
       AppState.config.regime = document.getElementById("edit-regime").value;
       AppState.config.baseHours = parseFloat(document.getElementById("edit-base-hours").value) || 1483;
+
+      const vacCarriedInput = parseFloat(document.getElementById("edit-vac-carried")?.value) || 0;
+      const dciCarriedInput = parseInt(document.getElementById("edit-dci-carried")?.value) || 0;
+      const carriedJustified = !!document.getElementById("edit-carried-justified")?.checked;
+
+      // Control anti-trampas si existen límites máximos auditados fijados
+      if (AppState.config.carriedMaxVacations !== null && AppState.config.carriedMaxVacations !== undefined) {
+        if (vacCarriedInput > AppState.config.carriedMaxVacations) {
+          showToast(`Control anti-trampas: No puedes superar el remanente auditado de vacaciones (${AppState.config.carriedMaxVacations} d).`, "error");
+          return;
+        }
+      }
+      if (AppState.config.carriedMaxDci !== null && AppState.config.carriedMaxDci !== undefined) {
+        if (dciCarriedInput > AppState.config.carriedMaxDci) {
+          showToast(`Control anti-trampas: No puedes superar el remanente auditado de DCI (${AppState.config.carriedMaxDci} d).`, "error");
+          return;
+        }
+      }
+
+      AppState.config.vacationsCarried = Math.max(0, vacCarriedInput);
+      AppState.config.dciCarried = Math.max(0, dciCarriedInput);
+      AppState.config.carriedJustified = carriedJustified;
 
       const startYear = parseISODate(AppState.config.startDate).getFullYear();
       AppState.calendarYear = startYear;
@@ -4241,6 +4591,85 @@ function initApp() {
   if (kpiLdExtraEl) {
     kpiLdExtraEl.addEventListener("click", () => {
       openHolidaySaturdaysModal();
+    });
+  }
+
+  // Modal de Traspaso de Remanente SAS (Enero)
+  const btnOpenRolloverModal = document.getElementById("btn-open-rollover-modal");
+  const btnOpenRolloverApplied = document.getElementById("btn-open-rollover-applied");
+  const btnCloseRolloverModal = document.getElementById("btn-close-rollover-modal");
+  const btnCancelRolloverModal = document.getElementById("btn-cancel-rollover-modal");
+  const btnApplyRollover = document.getElementById("btn-apply-rollover");
+  const modalRollover = document.getElementById("rollover-modal");
+
+  if (btnOpenRolloverModal) {
+    btnOpenRolloverModal.addEventListener("click", () => {
+      openRolloverModal(AppState.calendarYear - 1);
+    });
+  }
+  if (btnOpenRolloverApplied) {
+    btnOpenRolloverApplied.addEventListener("click", () => {
+      openRolloverModal(AppState.calendarYear - 1);
+    });
+  }
+  if (btnCloseRolloverModal) {
+    btnCloseRolloverModal.addEventListener("click", () => {
+      modalRollover?.classList.add("hidden");
+    });
+  }
+  if (btnCancelRolloverModal) {
+    btnCancelRolloverModal.addEventListener("click", () => {
+      modalRollover?.classList.add("hidden");
+    });
+  }
+  if (modalRollover) {
+    modalRollover.addEventListener("click", (e) => {
+      if (e.target === modalRollover) {
+        modalRollover.classList.add("hidden");
+      }
+    });
+  }
+  if (btnApplyRollover) {
+    btnApplyRollover.addEventListener("click", () => {
+      const targetPrevYear = AppState.calendarYear - 1;
+      const prevAudit = getPreviousYearAudit(targetPrevYear);
+      const vacInput = document.getElementById("rollover-vac-input");
+      const dciInput = document.getElementById("rollover-dci-input");
+      const justifiedCheck = document.getElementById("rollover-justified-check");
+
+      const vacVal = parseFloat(vacInput?.value) || 0;
+      const dciVal = parseInt(dciInput?.value) || 0;
+      const justifiedVal = !!justifiedCheck?.checked;
+
+      // Control anti-trampas: el número no puede superar los días sobrantes reales auditados
+      const maxVac = prevAudit.remainingVac;
+      const maxDci = prevAudit.remainingDci;
+
+      if (vacVal > maxVac) {
+        showToast(`Control anti-trampas: No puedes traspasar más de ${maxVac} días de vacaciones sobrantes de ${targetPrevYear}.`, "error");
+        return;
+      }
+      if (dciVal > maxDci) {
+        showToast(`Control anti-trampas: No puedes traspasar más de ${maxDci} días DCI sobrantes de ${targetPrevYear}.`, "error");
+        return;
+      }
+      if (vacVal < 0 || dciVal < 0) {
+        showToast("Los valores a traspasar no pueden ser negativos.", "error");
+        return;
+      }
+
+      AppState.config.vacationsCarried = vacVal;
+      AppState.config.dciCarried = dciVal;
+      AppState.config.carriedJustified = justifiedVal;
+      AppState.config.carriedFromYear = targetPrevYear;
+      AppState.config.carriedMaxVacations = maxVac;
+      AppState.config.carriedMaxDci = maxDci;
+
+      modalRollover?.classList.add("hidden");
+      syncConfigInputsFromState();
+      updateAll();
+      triggerSave(true);
+      showToast(`¡Traspaso de remanente de ${targetPrevYear} aplicado con éxito (+${vacVal}d Vacaciones, +${dciVal}d DCI)!`, "success");
     });
   }
 
