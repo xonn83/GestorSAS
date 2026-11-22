@@ -495,6 +495,88 @@
     </div>
 
     <!-- ============================================================== -->
+    <!-- MODAL GESTIÓN DE SÁBADOS FESTIVOS (MÁX. 2/AÑO)                -->
+    <!-- ============================================================== -->
+    <div id="holiday-saturdays-modal" class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs hidden no-print transition-opacity">
+      <div class="bg-white rounded-3xl shadow-2xl max-w-lg w-full p-5 sm:p-6 border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
+        
+        <!-- Cabecera del Modal -->
+        <div class="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 shrink-0">
+          <div class="flex items-center gap-2.5">
+            <div class="p-2 bg-amber-50 text-amber-600 rounded-xl">
+              <span class="text-xl leading-none">★</span>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Sábados Festivos Compensables</h3>
+              <p class="text-xs text-slate-500">Compensación de festivos según normativa SAS</p>
+            </div>
+          </div>
+          <button type="button" id="btn-close-holiday-modal" class="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- Cuerpo del Modal con Scroll -->
+        <div class="overflow-y-auto space-y-3.5 pr-1 text-xs">
+          
+          <!-- Banner Informativo Normativo -->
+          <div class="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-amber-950 space-y-1">
+            <div class="font-bold flex items-center gap-1.5 text-amber-900">
+              <svg class="w-4 h-4 text-amber-700 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Criterio de la Mesa Sectorial del SAS</span>
+            </div>
+            <p class="text-[11px] leading-relaxed text-amber-900/90">
+              Cada festivo oficial que coincida en <strong>sábado</strong> dentro de tu nombramiento suma <strong>+1 día DCI adicional</strong>, con un <strong>tope máximo legal de 2 al año</strong>.
+            </p>
+          </div>
+
+          <!-- Contador de Cupo Actual -->
+          <div class="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between gap-3">
+            <div>
+              <span class="text-slate-500 text-[11px] block">Festivos en sábado seleccionados</span>
+              <span class="text-xs text-slate-700 font-semibold" id="modal-sat-status-text">Puedes marcar hasta 2 sábados festivos</span>
+            </div>
+            <div class="text-right shrink-0">
+              <span id="modal-sat-counter-badge" class="px-2.5 py-1 rounded-full text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                0 / 2
+              </span>
+            </div>
+          </div>
+
+          <!-- Acción Rápida: Detección inteligente de festivos oficiales -->
+          <div id="modal-sat-auto-action-container" class="hidden">
+            <button type="button" id="btn-modal-sat-auto" class="w-full py-2 px-3 rounded-xl bg-purple-50 hover:bg-purple-100 border border-purple-200 text-purple-900 font-bold text-xs flex items-center justify-between transition-colors cursor-pointer">
+              <div class="flex items-center gap-1.5">
+                <span class="text-purple-600">⚡</span>
+                <span id="btn-modal-sat-auto-label">Marcar festivos oficiales automáticamente</span>
+              </div>
+              <span class="text-[11px] text-purple-700 font-semibold underline shrink-0 ml-2">Aplicar</span>
+            </button>
+          </div>
+
+          <!-- Listado de Sábados del Año dentro de Contrato -->
+          <div class="space-y-1.5">
+            <div class="flex items-center justify-between px-1">
+              <span class="font-bold text-slate-700 uppercase tracking-wider text-[10px]">Sábados de tu periodo de nombramiento (<span id="modal-sat-year-label">2026</span>)</span>
+            </div>
+            <div id="modal-saturdays-list" class="space-y-1.5 max-h-[38vh] overflow-y-auto pr-1">
+              <!-- Renderizado dinámico de sábados -->
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Pie del Modal -->
+        <div class="pt-3 mt-3 border-t border-slate-100 flex items-center justify-end gap-2.5 shrink-0">
+          <button type="button" id="btn-modal-sat-done" class="w-full sm:w-auto px-5 py-2 text-xs font-bold text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-xs transition-colors cursor-pointer text-center">
+            Listo / Cerrar
+          </button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============================================================== -->
     <!-- BARRA SUPERIOR INSTITUCIONAL SAS / GERHONTE                    -->
     <!-- ============================================================== -->
     <header class="bg-gradient-to-r from-emerald-950 via-emerald-900 to-teal-950 text-white border-b border-emerald-800/80 shadow-md no-print">
@@ -776,6 +858,14 @@
             </div>
             <button type="button" id="cal-btn-next" class="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 transition-colors cursor-pointer select-none" title="Mes Siguiente">
               <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+            </button>
+
+            <!-- Botón Sábados Festivos SAS -->
+            <button type="button" id="btn-open-holiday-saturdays" class="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-amber-300/80 bg-amber-50 hover:bg-amber-100 text-amber-950 font-bold text-xs shadow-2xs transition-all cursor-pointer select-none shrink-0" title="Gestionar festivos que caen en sábado (+1 día DCI SAS, máx. 2/año)">
+              <span class="text-amber-500 font-black text-xs leading-none">★</span>
+              <span class="hidden sm:inline">Sábados festivos:</span>
+              <span class="sm:hidden font-extrabold">Sáb. Fest:</span>
+              <span id="cal-sat-badge" class="px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-950 font-mono text-[10px] font-black">0/2</span>
             </button>
           </div>
 
