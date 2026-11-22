@@ -432,60 +432,36 @@ export function getMonthActiveContractDays(year, month) {
 }
 
 export function getActiveHolidaySaturdays(targetYear = AppState.calendarYear) {
-  const result = [];
+  const officialHolidaysInContract = getOfficialSaturdayHolidaysInContract(targetYear);
   const holidaySats = AppState.holidaySaturdays || {};
+
+  // 1. Festivos oficiales que caen en sábado dentro del contrato:
+  // Activos por defecto, salvo que el usuario los haya desactivado explícitamente (valor === false)
+  const activeDefaultSats = officialHolidaysInContract
+    .filter(h => holidaySats[h.dateStr] !== false)
+    .map(h => h.dateStr);
+
+  // 2. Festivos locales: marcados explícitamente por el usuario (valor === true) y que no sean oficiales
+  const officialDateSet = new Set(officialHolidaysInContract.map(h => h.dateStr));
+  const activeLocalSats = [];
   Object.keys(holidaySats).forEach(dateStr => {
-    if (!holidaySats[dateStr]) return;
-    if (!dateStr.startsWith(`${targetYear}-`)) return;
-    if (!isDateInsideContract(dateStr)) return;
-    const d = parseISODate(dateStr);
-    if (d.getDay() === 6) {
-      result.push(dateStr);
+    if (holidaySats[dateStr] === true && !officialDateSet.has(dateStr)) {
+      if (dateStr.startsWith(`${targetYear}-`) && isDateInsideContract(dateStr)) {
+        const d = parseISODate(dateStr);
+        if (d.getDay() === 6) {
+          const m = d.getMonth();
+          const day = d.getDate();
+          if (!(m === 11 && (day === 24 || day === 31))) {
+            activeLocalSats.push(dateStr);
+          }
+        }
+      }
     }
   });
-  result.sort();
-  return result;
-}
+  activeLocalSats.sort();
 
-export function getDciExceptions(targetYear = AppState.calendarYear) {
-  // 1. Sábados festivos (tope legal del SAS: máx. 2 al año dentro del contrato)
-  const activeSaturdays = getActiveHolidaySaturdays(targetYear);
-  const cappedHolidaySaturdays = activeSaturdays.slice(0, 2);
-  const saturdayHolidayDays = cappedHolidaySaturdays.length;
-
-  // 2. Detección automática del 24 y 31 de diciembre en fin de semana (sábado o domingo)
-  let dec24Extra = false;
-  let dec31Extra = false;
-
-  const d24Str = `${targetYear}-12-24`;
-  if (isDateInsideContract(d24Str)) {
-    const d24 = parseISODate(d24Str);
-    const dayOfWeek = d24.getDay(); // 0 = Domingo, 6 = Sábado
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      dec24Extra = true;
-    }
-  }
-
-  const d31Str = `${targetYear}-12-31`;
-  if (isDateInsideContract(d31Str)) {
-    const d31 = parseISODate(d31Str);
-    const dayOfWeek = d31.getDay(); // 0 = Domingo, 6 = Sábado
-    if (dayOfWeek === 0 || dayOfWeek === 6) {
-      dec31Extra = true;
-    }
-  }
-
-  const decWeekendDays = (dec24Extra ? 1 : 0) + (dec31Extra ? 1 : 0);
-  const totalExtraDays = saturdayHolidayDays + decWeekendDays;
-
-  return {
-    saturdayHolidayDays,
-    cappedHolidaySaturdays,
-    dec24Extra,
-    dec31Extra,
-    decWeekendDays,
-    totalExtraDays
-  };
+  // Unión con prioridad: primero oficiales por defecto, luego locales
+  return [...activeDefaultSats, ...activeLocalSats];
 }
 
 export const OFFICIAL_SAS_HOLIDAYS = [
@@ -515,6 +491,63 @@ export function getOfficialSaturdayHolidaysInContract(targetYear = AppState.cale
   return result;
 }
 
+export function getDciExceptions(targetYear = AppState.calendarYear) {
+  const officialHolidaysInContract = getOfficialSaturdayHolidaysInContract(targetYear);
+  const officialDateSet = new Set(officialHolidaysInContract.map(h => h.dateStr));
+
+  // 1. Sábados festivos (tope legal del SAS: máx. 2 al año dentro del contrato)
+  const allActiveSaturdays = getActiveHolidaySaturdays(targetYear);
+  const cappedHolidaySaturdays = allActiveSaturdays.slice(0, 2);
+  const saturdayHolidayDays = cappedHolidaySaturdays.length;
+
+  const activeDefaultSats = cappedHolidaySaturdays.filter(d => officialDateSet.has(d));
+  const activeLocalSats = cappedHolidaySaturdays.filter(d => !officialDateSet.has(d));
+  const availableLocalQuota = Math.max(0, 2 - saturdayHolidayDays);
+
+  const defaultNamesList = officialHolidaysInContract
+    .filter(h => cappedHolidaySaturdays.includes(h.dateStr))
+    .map(h => `${h.day} ${MONTH_NAMES[h.month].substring(0, 3)} (${h.name})`);
+
+  // 2. Detección automática del 24 y 31 de diciembre en fin de semana (sábado o domingo)
+  let dec24Extra = false;
+  let dec31Extra = false;
+
+  const d24Str = `${targetYear}-12-24`;
+  if (isDateInsideContract(d24Str)) {
+    const d24 = parseISODate(d24Str);
+    const dayOfWeek = d24.getDay(); // 0 = Domingo, 6 = Sábado
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      dec24Extra = true;
+    }
+  }
+
+  const d31Str = `${targetYear}-12-31`;
+  if (isDateInsideContract(d31Str)) {
+    const d31 = parseISODate(d31Str);
+    const dayOfWeek = d31.getDay(); // 0 = Domingo, 6 = Sábado
+    if (dayOfWeek === 0 || dayOfWeek === 6) {
+      dec31Extra = true;
+    }
+  }
+
+  const decWeekendDays = (dec24Extra ? 1 : 0) + (dec31Extra ? 1 : 0);
+  const totalExtraDays = saturdayHolidayDays + decWeekendDays;
+
+  return {
+    saturdayHolidayDays,
+    cappedHolidaySaturdays,
+    activeDefaultSats,
+    activeLocalSats,
+    availableLocalQuota,
+    officialHolidaysInContract,
+    defaultNamesList,
+    dec24Extra,
+    dec31Extra,
+    decWeekendDays,
+    totalExtraDays
+  };
+}
+
 export function renderHolidaySaturdaysModal() {
   const year = AppState.calendarYear;
   const dciExceptions = getDciExceptions(year);
@@ -536,28 +569,41 @@ export function renderHolidaySaturdaysModal() {
   const statusText = document.getElementById("modal-sat-status-text");
   if (statusText) {
     if (dciExceptions.saturdayHolidayDays === 2) {
-      statusText.textContent = "Tope legal completado (+2 días DCI aplicados)";
+      statusText.textContent = "Tope legal del SAS completado (+2 días DCI aplicados)";
       statusText.className = "text-xs text-emerald-700 font-bold";
     } else if (dciExceptions.saturdayHolidayDays === 1) {
-      statusText.textContent = "1 festivo marcado. Puedes seleccionar 1 más.";
+      statusText.textContent = "1 festivo en sábado computado. Tienes cupo para 1 festivo local más.";
       statusText.className = "text-xs text-amber-700 font-semibold";
     } else {
-      statusText.textContent = "Puedes marcar hasta 2 sábados festivos dentro de tu contrato";
+      statusText.textContent = "Sin festivos computados. Puedes marcar hasta 2 festivos locales en sábado.";
       statusText.className = "text-xs text-slate-700 font-semibold";
     }
   }
 
-  // Acción rápida para festivos oficiales que caen en sábado
+  // Desglose transparente en el modal
+  const summaryDetails = document.getElementById("modal-sat-summary-details");
+  if (summaryDetails) {
+    const defCount = dciExceptions.activeDefaultSats.length;
+    const locCount = dciExceptions.activeLocalSats.length;
+    let defHtml = "";
+    if (defCount > 0) {
+      defHtml = `<div><strong class="text-slate-800">Por defecto (festivos oficiales SAS):</strong> <span class="text-slate-700">${dciExceptions.defaultNamesList.join(", ")}</span></div>`;
+    } else {
+      defHtml = `<div><strong class="text-slate-800">Por defecto:</strong> <span class="text-slate-500">Ningún festivo oficial coincide en sábado dentro de tu contrato en ${year}.</span></div>`;
+    }
+    const locHtml = `<div class="mt-1 pt-1 border-t border-slate-100"><strong class="text-slate-800">Festivos locales (tu municipio):</strong> <span class="text-slate-700">${locCount} marcado(s)</span> · <span class="text-amber-800 font-bold">${dciExceptions.availableLocalQuota} disponible(s) para marcar</span></div>`;
+    summaryDetails.innerHTML = `${defHtml}${locHtml}`;
+  }
+
+  // Botón para restablecer festivos oficiales si el usuario desactivó alguno
   const autoContainer = document.getElementById("modal-sat-auto-action-container");
   const autoBtnLabel = document.getElementById("btn-modal-sat-auto-label");
-  const officialSats = getOfficialSaturdayHolidaysInContract(year);
-  const unselectedOfficialSats = officialSats.filter(s => !holidaySats[s.dateStr]);
+  const hasDisabledOfficial = dciExceptions.officialHolidaysInContract.some(h => holidaySats[h.dateStr] === false);
 
   if (autoContainer && autoBtnLabel) {
-    if (unselectedOfficialSats.length > 0 && dciExceptions.saturdayHolidayDays < 2) {
+    if (hasDisabledOfficial) {
       autoContainer.classList.remove("hidden");
-      const names = unselectedOfficialSats.map(s => `${s.day} ${MONTH_NAMES[s.month].substring(0, 3)} (${s.name})`).join(", ");
-      autoBtnLabel.textContent = `⚡ Marcar festivos oficiales: ${names}`;
+      autoBtnLabel.textContent = "Restablecer festivos oficiales por defecto";
     } else {
       autoContainer.classList.add("hidden");
     }
@@ -582,13 +628,19 @@ export function renderHolidaySaturdaysModal() {
       const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
       if (isDateInsideContract(dateStr)) {
         const offHoliday = OFFICIAL_SAS_HOLIDAYS.find(h => h.month === month && h.day === day);
+        const isOfficial = !!offHoliday;
+        const isActive = dciExceptions.cappedHolidaySaturdays.includes(dateStr);
+        const isOfficialDisabled = isOfficial && holidaySats[dateStr] === false;
+
         saturdays.push({
           dateStr,
           day,
           month,
           monthName: MONTH_NAMES[month],
           officialName: offHoliday ? offHoliday.name : null,
-          isMarked: !!holidaySats[dateStr]
+          isOfficial,
+          isActive,
+          isOfficialDisabled
         });
       }
     }
@@ -601,28 +653,42 @@ export function renderHolidaySaturdaysModal() {
 
   saturdays.forEach(sat => {
     const item = document.createElement("div");
-    const isChecked = sat.isMarked;
-    const canCheck = !isChecked && dciExceptions.saturdayHolidayDays < 2;
+    const isChecked = sat.isActive;
+    const canCheck = !isChecked && dciExceptions.availableLocalQuota > 0;
 
     let borderBg = isChecked
       ? "bg-amber-50/70 border-amber-300 text-amber-950"
       : "bg-white hover:bg-slate-50 border-slate-200 text-slate-800";
 
     let btnHtml = "";
-    if (isChecked) {
-      btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}">
-        <span>✔</span>
-        <span>Marcado (+1 DCI)</span>
-      </button>`;
-    } else if (canCheck) {
-      btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}">
-        <span>+</span>
-        <span>Marcar festivo</span>
-      </button>`;
+    if (sat.isOfficial) {
+      if (isChecked) {
+        btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-black bg-purple-600 hover:bg-purple-700 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}" data-type="official" title="Toca para desactivar este festivo oficial y liberar cupo para un festivo local">
+          <span>✔</span>
+          <span>Por defecto (+1 DCI)</span>
+        </button>`;
+      } else {
+        btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-purple-50 text-purple-800 border border-purple-300 transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}" data-type="official" title="Reactivar este festivo oficial">
+          <span>+</span>
+          <span>Activar oficial (+1 DCI)</span>
+        </button>`;
+      }
     } else {
-      btnHtml = `<button type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shrink-0" disabled title="Tope de 2 festivos alcanzado">
-        Cupo lleno (2/2)
-      </button>`;
+      if (isChecked) {
+        btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-black bg-amber-500 hover:bg-amber-600 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}" data-type="local" title="Toca para desmarcar este festivo local">
+          <span>✔</span>
+          <span>Festivo local (+1 DCI)</span>
+        </button>`;
+      } else if (canCheck) {
+        btnHtml = `<button type="button" class="btn-toggle-sat px-2.5 py-1.5 rounded-lg text-xs font-bold bg-white hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all cursor-pointer flex items-center gap-1 shrink-0" data-date="${sat.dateStr}" data-type="local">
+          <span>+</span>
+          <span>Marcar festivo local</span>
+        </button>`;
+      } else {
+        btnHtml = `<button type="button" class="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-100 text-slate-400 border border-slate-200 cursor-not-allowed shrink-0" disabled title="Tope de 2 festivos alcanzado">
+          Cupo lleno (2/2)
+        </button>`;
+      }
     }
 
     let officialBadge = sat.officialName
@@ -648,24 +714,42 @@ export function renderHolidaySaturdaysModal() {
   listEl.querySelectorAll(".btn-toggle-sat").forEach(btn => {
     btn.addEventListener("click", () => {
       const targetDate = btn.dataset.date;
+      const type = btn.dataset.type;
       if (!AppState.holidaySaturdays) AppState.holidaySaturdays = {};
 
-      const isAlready = !!AppState.holidaySaturdays[targetDate];
-      if (isAlready) {
-        delete AppState.holidaySaturdays[targetDate];
-        updateAll();
-        renderHolidaySaturdaysModal();
-        showToast("Sábado desmarcado como festivo", "info");
-      } else {
-        const curEx = getDciExceptions(year);
-        if (curEx.saturdayHolidayDays >= 2) {
-          showToast("Según la normativa del SAS, solo se compensan un máximo de 2 festivos en sábado al año.", "warning");
-          return;
+      if (type === "official") {
+        if (AppState.holidaySaturdays[targetDate] === false) {
+          // Reactivar
+          delete AppState.holidaySaturdays[targetDate];
+          updateAll();
+          renderHolidaySaturdaysModal();
+          showToast("Festivo oficial reactivado (+1 día DCI)", "success");
+        } else {
+          // Desactivar
+          AppState.holidaySaturdays[targetDate] = false;
+          updateAll();
+          renderHolidaySaturdaysModal();
+          showToast("Festivo oficial desactivado (cupo liberado para festivo local)", "info");
         }
-        AppState.holidaySaturdays[targetDate] = true;
-        updateAll();
-        renderHolidaySaturdaysModal();
-        showToast("Sábado marcado como festivo compensable (+1 día DCI)", "success");
+      } else {
+        // Local
+        const isAlready = (AppState.holidaySaturdays[targetDate] === true);
+        if (isAlready) {
+          delete AppState.holidaySaturdays[targetDate];
+          updateAll();
+          renderHolidaySaturdaysModal();
+          showToast("Festivo local desmarcado", "info");
+        } else {
+          const curEx = getDciExceptions(year);
+          if (curEx.saturdayHolidayDays >= 2) {
+            showToast("Según la normativa del SAS, solo se compensan un máximo de 2 festivos en sábado al año.", "warning");
+            return;
+          }
+          AppState.holidaySaturdays[targetDate] = true;
+          updateAll();
+          renderHolidaySaturdaysModal();
+          showToast("Sábado marcado como festivo local (+1 día DCI)", "success");
+        }
       }
     });
   });
@@ -1600,13 +1684,38 @@ function renderCalendar() {
   document.getElementById("cal-year-display").textContent = year;
 
   const calSatBadge = document.getElementById("cal-sat-badge");
+  const calSatDetails = document.getElementById("cal-sat-details");
+  const dciEx = getDciExceptions(year);
   if (calSatBadge) {
-    const dciEx = getDciExceptions(year);
     calSatBadge.textContent = `${dciEx.saturdayHolidayDays}/2`;
     if (dciEx.saturdayHolidayDays >= 2) {
       calSatBadge.className = "px-1.5 py-0.5 rounded-full bg-emerald-200 text-emerald-950 font-mono text-[10px] font-black";
     } else {
       calSatBadge.className = "px-1.5 py-0.5 rounded-full bg-amber-200 text-amber-950 font-mono text-[10px] font-black";
+    }
+  }
+
+  if (calSatDetails) {
+    const defCount = dciEx.activeDefaultSats.length;
+    const locCount = dciEx.activeLocalSats.length;
+    const defNames = dciEx.defaultNamesList.join(" y ");
+
+    if (defCount === 2) {
+      calSatDetails.textContent = `2 por defecto: ${defNames} · 0 disponibles para festivo local`;
+    } else if (defCount === 1) {
+      if (locCount === 0) {
+        calSatDetails.textContent = `1 por defecto: ${defNames} · 1 disponible para festivo local`;
+      } else {
+        calSatDetails.textContent = `1 por defecto: ${defNames} + 1 local · Tope (2/2) completado`;
+      }
+    } else {
+      if (locCount === 0) {
+        calSatDetails.textContent = `0 por defecto · 2 disponibles para festivos locales`;
+      } else if (locCount === 1) {
+        calSatDetails.textContent = `1 festivo local marcado · 1 disponible para festivo local`;
+      } else {
+        calSatDetails.textContent = `2 festivos locales marcados · Tope (2/2) completado`;
+      }
     }
   }
 
@@ -1667,7 +1776,7 @@ function renderCalendar() {
     const isSaturday = (dayOfWeek === 6);
     const isDec24 = (month === 11 && day === 24);
     const isDec31 = (month === 11 && day === 31);
-    const isSatHoliday = (isSaturday && !isDec24 && !isDec31 && AppState.holidaySaturdays && !!AppState.holidaySaturdays[dateStr]);
+    const isSatHoliday = (isSaturday && !isDec24 && !isDec31 && dciEx.cappedHolidaySaturdays.includes(dateStr));
 
     let cellClass = "min-h-[50px] sm:min-h-[82px] p-1 sm:p-1.5 flex flex-col justify-between transition-colors relative group select-none rounded-lg border ";
     if (!inContract) {
@@ -1691,11 +1800,18 @@ function renderCalendar() {
       // 1. Sábados festivos (solo en sábados dentro de contrato, excluyendo 24/31 dic que tienen su propia regla)
       if (isSaturday && !isDec24 && !isDec31) {
         if (isSatHoliday) {
-          topHtml += `<button type="button" class="btn-open-holiday-modal-badge inline-flex items-center justify-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black bg-amber-500 text-white shadow-2xs hover:bg-amber-600 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="Sábado Festivo compensable (+1 día DCI SAS). Toca para ver o modificar.">★<span class="hidden sm:inline ml-0.5">Festivo</span></button>`;
+          const offH = OFFICIAL_SAS_HOLIDAYS.find(h => h.month === month && h.day === day);
+          const holidayTitle = offH
+            ? `Sábado Festivo oficial SAS (${offH.name}): compensable (+1 día DCI). Toca para ver o modificar.`
+            : `Sábado Festivo local: compensable (+1 día DCI SAS). Toca para ver o modificar.`;
+          const badgeText = offH ? offH.name : "Festivo Local";
+          topHtml += `<button type="button" class="btn-open-holiday-modal-badge inline-flex items-center justify-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black bg-amber-500 text-white shadow-2xs hover:bg-amber-600 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="${holidayTitle}">★<span class="hidden sm:inline ml-0.5">${badgeText}</span></button>`;
         } else {
           // En móviles NO mostramos nada para que el recuadro quede amplio y limpio.
-          // En pantallas sm+ (desktop) se muestra botón discreto sólo en hover
-          topHtml += `<button type="button" class="btn-open-holiday-modal-badge hidden sm:group-hover:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold text-slate-400 hover:text-amber-800 hover:bg-amber-100 border border-slate-200 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="Gestionar festivos en sábado (+1 día DCI SAS)">☆ Festivo</button>`;
+          // En pantallas sm+ (desktop) se muestra botón discreto sólo en hover si queda cupo local
+          if (dciEx.availableLocalQuota > 0) {
+            topHtml += `<button type="button" class="btn-open-holiday-modal-badge hidden sm:group-hover:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold text-slate-400 hover:text-amber-800 hover:bg-amber-100 border border-slate-200 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="Marcar como festivo local (+1 día DCI SAS)">☆ Festivo Local</button>`;
+          }
         }
       } else if (isDec24) {
         if (isWeekend) {
@@ -4104,21 +4220,19 @@ function initApp() {
       const year = AppState.calendarYear;
       if (!AppState.holidaySaturdays) AppState.holidaySaturdays = {};
       const officialSats = getOfficialSaturdayHolidaysInContract(year);
-      let added = 0;
+      let restored = 0;
       for (const s of officialSats) {
-        const curEx = getDciExceptions(year);
-        if (curEx.saturdayHolidayDays >= 2) break;
-        if (!AppState.holidaySaturdays[s.dateStr]) {
-          AppState.holidaySaturdays[s.dateStr] = true;
-          added++;
+        if (AppState.holidaySaturdays[s.dateStr] === false) {
+          delete AppState.holidaySaturdays[s.dateStr];
+          restored++;
         }
       }
-      if (added > 0) {
+      if (restored > 0) {
         updateAll();
         renderHolidaySaturdaysModal();
-        showToast(`Se han marcado ${added} festivo(s) oficial(es) en sábado (+${added} día(s) DCI)`, "success");
+        showToast(`Se han restablecido ${restored} festivo(s) oficial(es) por defecto (+${restored} día(s) DCI)`, "success");
       } else {
-        showToast("Todos los festivos oficiales ya estaban marcados o se ha alcanzado el tope de 2", "info");
+        showToast("Todos los festivos oficiales ya están activos por defecto", "info");
       }
     });
   }
