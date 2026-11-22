@@ -407,11 +407,12 @@ export function getContractDaysTotal(targetYear = AppState.calendarYear) {
 }
 
 export function getContractRequiredHoursTotal(targetYear = AppState.calendarYear) {
-  let total = 0;
-  for (let m = 0; m < 12; m++) {
-    total += getMonthRequiredHours(targetYear, m);
-  }
-  return parseFloat(total.toFixed(1));
+  const contractDays = getContractDaysTotal(targetYear);
+  const yearDays = getDaysInYear(targetYear);
+  const baseHours = parseFloat(AppState.config.baseHours) || 1540;
+  if (contractDays === 0) return 0.0;
+  if (contractDays === yearDays) return baseHours;
+  return parseFloat(((contractDays / yearDays) * baseHours).toFixed(1));
 }
 
 export function getMonthActiveContractDays(year, month) {
@@ -429,25 +430,56 @@ export function getMonthActiveContractDays(year, month) {
   return activeCount;
 }
 
+export function getMonthPermissionDays(year, month) {
+  const row = AppState.monthlyTableData ? AppState.monthlyTableData[month] : null;
+  if (row && typeof row.vacaciones === "number" && typeof row.moscosos === "number") {
+    return {
+      vacaciones: row.vacaciones || 0,
+      dci: row.moscosos || 0
+    };
+  }
+  let v = 0, dci = 0;
+  const daysInMonth = getDaysInMonth(year, month);
+  for (let day = 1; day <= daysInMonth; day++) {
+    const dateStr = formatISODate(year, month, day);
+    if (!isDateInsideContract(dateStr)) continue;
+    const shift = AppState.calendarShifts ? AppState.calendarShifts[dateStr] : null;
+    if (shift === "V") v++;
+    else if (shift === "DCI" || shift === "LD") dci++;
+  }
+  return { vacaciones: v, dci };
+}
+
 export function getMonthRequiredHours(year, month) {
   const activeDays = getMonthActiveContractDays(year, month);
   if (activeDays === 0) return 0.0;
   const daysInYear = getDaysInYear(year);
   const baseHours = parseFloat(AppState.config.baseHours) || 1540;
-  const dailyRate = baseHours / daysInYear;
+  const annualVacDays = parseFloat(AppState.config.annualVacationDays) || 22.0;
+  const annualDciDays = parseFloat(AppState.config.annualLdDays || AppState.config.annualDciDays) || 6.0;
+  const hV = parseFloat(AppState.config.hoursV) || 7.0;
+  const hDCI = parseFloat(AppState.config.hoursDCI) || 7.0;
 
-  // Cómputo exacto por diferencia acumulada para garantizar que la suma
-  // de las cuotas mensuales coincida con exactitud matemática con la jornada anual prorrateada
+  // Cuota anual interna bruta (invisible en la UI) = jornada neta anual + vacaciones reglamentarias (22*7h) + DCI (6*7h)
+  const grossAnnualHours = baseHours + (annualVacDays * hV) + (annualDciDays * hDCI);
+  const dailyRateInternal = grossAnnualHours / daysInYear;
+
+  // Cómputo por diferencia acumulada para cuadre perfecto al decimal
   let cumDaysBefore = 0;
   for (let m = 0; m < month; m++) {
     cumDaysBefore += getMonthActiveContractDays(year, m);
   }
   const cumDaysCurrent = cumDaysBefore + activeDays;
 
-  const cumHoursCurrent = Math.round(dailyRate * cumDaysCurrent * 10) / 10;
-  const cumHoursBefore = Math.round(dailyRate * cumDaysBefore * 10) / 10;
+  const cumGrossCurrent = Math.round(dailyRateInternal * cumDaysCurrent * 10) / 10;
+  const cumGrossBefore = Math.round(dailyRateInternal * cumDaysBefore * 10) / 10;
+  const grossMonthHours = cumGrossCurrent - cumGrossBefore;
 
-  return parseFloat((cumHoursCurrent - cumHoursBefore).toFixed(1));
+  // Descuento exacto de 7h por cada día de Vacaciones [V] o de [DCI] disfrutado en este mes
+  const perm = getMonthPermissionDays(year, month);
+  const deduction = (perm.vacaciones * hV) + (perm.dci * hDCI);
+
+  return Math.max(0, parseFloat((grossMonthHours - deduction).toFixed(1)));
 }
 
 export function isDateInsideContract(dateStr) {
@@ -981,12 +1013,9 @@ export function getAccumulatedMetrics() {
   let totalDciConsumedDays = 0;
   let totalDajConsumedDays = 0;
 
-  let filledMonthsCount = 0;
   let lastFilledMonth = -1;
-  let workedInFilledMonths = 0;
-  let requiredInFilledMonths = 0;
-  let presentialInFilledMonths = 0;
 
+  // Paso 1: Encontrar el último mes con actividad (turnos o permisos)
   AppState.monthlyTableData.forEach((row, m) => {
     const actDays = getMonthActiveContractDays(year, m);
     totalActiveDaysInYear += actDays;
@@ -1015,18 +1044,38 @@ export function getAccumulatedMetrics() {
     );
 
     if (actDays > 0 && hasShifts) {
-      filledMonthsCount++;
       lastFilledMonth = m;
-      workedInFilledMonths += effHours;
-      requiredInFilledMonths += getMonthRequiredHours(year, m);
-      presentialInFilledMonths += presHours;
     }
   });
 
+  // Paso 2: Corte de auditoría a mitad de año (Tarjeta 1 de Exceso de Jornada DAJ):
+  // Compara únicamente los meses desde el inicio del nombramiento hasta el último mes registrado (lastFilledMonth),
+  // ignorando completamente los meses futuros vacíos.
+  let workedInAuditedMonths = 0;
+  let requiredInAuditedMonths = 0;
+  let presentialInAuditedMonths = 0;
+  let filledMonthsCount = 0;
+
+  if (lastFilledMonth >= 0) {
+    for (let m = 0; m <= lastFilledMonth; m++) {
+      const actDays = getMonthActiveContractDays(year, m);
+      if (actDays > 0) {
+        filledMonthsCount++;
+        const row = AppState.monthlyTableData[m];
+        const mCount = row.mananas || 0;
+        const tCount = row.tardes || 0;
+        const nCount = row.noches || 0;
+        const presHours = (mCount * hM) + (tCount * hT) + (nCount * hN) + (row.horasEspeciales || 0);
+        workedInAuditedMonths += presHours;
+        requiredInAuditedMonths += getMonthRequiredHours(year, m);
+        presentialInAuditedMonths += presHours;
+      }
+    }
+  }
+
   // Saldo General Acumulado en meses auditados:
-  // Horas efectivas realizadas menos horas exigibles en los meses con registros.
   const rawAccumulatedBalance = filledMonthsCount > 0
-    ? parseFloat((workedInFilledMonths - requiredInFilledMonths).toFixed(1))
+    ? parseFloat((workedInAuditedMonths - requiredInAuditedMonths).toFixed(1))
     : 0.0;
   const accumulatedBalance = Math.abs(rawAccumulatedBalance) < 0.05 ? 0.0 : rawAccumulatedBalance;
 
@@ -1149,48 +1198,105 @@ function renderKpis() {
   // -------------------------------------------------------------
   // TARJETA 2: Bolsa Vacaciones
   // -------------------------------------------------------------
+  const cardVacEl = document.getElementById("card-kpi-vac");
   const vacValueEl = document.getElementById("kpi-vac-value");
   const vacLabelEl = document.getElementById("kpi-vac-label");
   const vacBadgeEl = document.getElementById("kpi-vac-badge");
   const vacSubEl = document.getElementById("kpi-vac-sub");
 
-  if (vacBadgeEl) {
-    vacBadgeEl.className = "hidden";
-  }
+  const isVacExceeded = metrics.totalVacationConsumedDays > metrics.totalVacationDays;
 
-  if (vacValueEl) {
-    vacValueEl.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días`;
-  }
-  if (vacLabelEl) {
-    vacLabelEl.textContent = "";
-  }
-  if (vacSubEl) {
-    vacSubEl.textContent = "";
+  if (isVacExceeded) {
+    if (cardVacEl) {
+      cardVacEl.className = "bg-rose-50/70 rounded-xl sm:rounded-2xl border-2 border-rose-400 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md";
+    }
+    if (vacBadgeEl) {
+      vacBadgeEl.className = "inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300";
+      vacBadgeEl.textContent = "Cupo excedido";
+    }
+    if (vacValueEl) {
+      vacValueEl.className = "text-xl sm:text-2xl font-black tracking-tight text-rose-700";
+      vacValueEl.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días`;
+    }
+    if (vacLabelEl) {
+      vacLabelEl.className = "text-[11px] sm:text-xs font-bold text-rose-600 mt-0.5 line-clamp-1";
+      vacLabelEl.textContent = `⚠️ Exceso: +${(metrics.totalVacationConsumedDays - metrics.totalVacationDays).toFixed(1)} d sobre cupo`;
+    }
+    if (vacSubEl) {
+      vacSubEl.className = "text-rose-600 font-semibold";
+      vacSubEl.textContent = `${metrics.totalVacationConsumedDays} d disfrutados en cuadrante`;
+    }
+  } else {
+    if (cardVacEl) {
+      cardVacEl.className = "bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md";
+    }
+    if (vacBadgeEl) {
+      vacBadgeEl.className = "hidden";
+    }
+    if (vacValueEl) {
+      vacValueEl.className = "text-xl sm:text-2xl font-black tracking-tight text-slate-900";
+      vacValueEl.textContent = `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} días`;
+    }
+    if (vacLabelEl) {
+      vacLabelEl.className = "text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 line-clamp-1";
+      vacLabelEl.textContent = `${metrics.remainingVacationDays} días disponibles`;
+    }
+    if (vacSubEl) {
+      vacSubEl.className = "text-slate-500 font-semibold";
+      vacSubEl.textContent = `${metrics.totalVacationConsumedDays} d disfrutados en cuadrante`;
+    }
   }
 
   // -------------------------------------------------------------
   // TARJETA 3: Días DCI (Libre Disposición)
   // -------------------------------------------------------------
+  const cardDciEl = document.getElementById("card-kpi-dci");
   const ldValueEl = document.getElementById("kpi-ld-value");
   const ldLabelEl = document.getElementById("kpi-ld-label");
   const ldBadgeEl = document.getElementById("kpi-ld-badge");
   const ldSubEl = document.getElementById("kpi-ld-sub");
 
-  if (ldBadgeEl) {
-    ldBadgeEl.className = "hidden";
-  }
+  const isDciExceeded = metrics.totalDciConsumedDays > metrics.totalDciDays;
 
-  if (ldValueEl) {
-    ldValueEl.textContent = `${metrics.remainingDciDays} / ${metrics.totalDciDays} días`;
-  }
-  if (ldLabelEl) {
-    ldLabelEl.textContent = "";
-  }
-  if (ldSubEl) {
-    ldSubEl.textContent = "";
-  }
-  if (ldSubEl) {
-    ldSubEl.textContent = "";
+  if (isDciExceeded) {
+    if (cardDciEl) {
+      cardDciEl.className = "bg-rose-50/70 rounded-xl sm:rounded-2xl border-2 border-rose-400 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md";
+    }
+    if (ldBadgeEl) {
+      ldBadgeEl.className = "inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-300";
+      ldBadgeEl.textContent = "Cupo excedido";
+    }
+    if (ldValueEl) {
+      ldValueEl.className = "text-xl sm:text-2xl font-black tracking-tight text-rose-700";
+      ldValueEl.textContent = `${metrics.remainingDciDays} / ${metrics.totalDciDays} días`;
+    }
+    if (ldLabelEl) {
+      ldLabelEl.className = "text-[11px] sm:text-xs font-bold text-rose-600 mt-0.5 line-clamp-1";
+      ldLabelEl.textContent = `⚠️ Exceso: +${(metrics.totalDciConsumedDays - metrics.totalDciDays).toFixed(1)} d sobre cupo`;
+    }
+    if (ldSubEl) {
+      ldSubEl.className = "text-rose-600 font-semibold";
+      ldSubEl.textContent = `${metrics.totalDciConsumedDays} d disfrutados en cuadrante`;
+    }
+  } else {
+    if (cardDciEl) {
+      cardDciEl.className = "bg-white rounded-xl sm:rounded-2xl border border-slate-200/90 p-3 sm:p-4 shadow-xs flex flex-col justify-between transition-all hover:shadow-md";
+    }
+    if (ldBadgeEl) {
+      ldBadgeEl.className = "hidden";
+    }
+    if (ldValueEl) {
+      ldValueEl.className = "text-xl sm:text-2xl font-black tracking-tight text-slate-900";
+      ldValueEl.textContent = `${metrics.remainingDciDays} / ${metrics.totalDciDays} días`;
+    }
+    if (ldLabelEl) {
+      ldLabelEl.className = "text-[11px] sm:text-xs font-medium text-slate-500 mt-0.5 line-clamp-1";
+      ldLabelEl.textContent = `${metrics.remainingDciDays} días disponibles`;
+    }
+    if (ldSubEl) {
+      ldSubEl.className = "text-slate-500 font-semibold";
+      ldSubEl.textContent = `${metrics.totalDciConsumedDays} d disfrutados en cuadrante`;
+    }
   }
 }
 
@@ -1440,6 +1546,23 @@ function applyBrushToDate(dateStr) {
   // 4. Caso: Mismo turno ya registrado en esa fecha
   if (currentShift === newShiftValue) {
     return;
+  }
+
+  // 4.1 Control y aviso de límite en Vacaciones y DCI
+  if (newShiftValue === "V" && currentShift !== "V") {
+    const currentMetrics = getAccumulatedMetrics();
+    if (currentMetrics.totalVacationConsumedDays >= currentMetrics.totalVacationDays) {
+      showToast(`Has alcanzado el límite de días de Vacaciones (${currentMetrics.totalVacationDays}/${currentMetrics.totalVacationDays} d) correspondientes a este nombramiento.`, "warning");
+      return;
+    }
+  }
+
+  if ((newShiftValue === "DCI" || newShiftValue === "LD") && currentShift !== "DCI" && currentShift !== "LD") {
+    const currentMetrics = getAccumulatedMetrics();
+    if (currentMetrics.totalDciConsumedDays >= currentMetrics.totalDciDays) {
+      showToast(`Has alcanzado el límite de días DCI (${currentMetrics.totalDciDays}/${currentMetrics.totalDciDays} d) correspondientes a este nombramiento.`, "warning");
+      return;
+    }
   }
 
   // 5. Caso: Sobreescribir una casilla que ya tiene OTRO turno previamente grabado
@@ -2221,6 +2344,21 @@ export function exportarPDF() {
   const dajColor = metrics.accumulatedBalance < 0 ? [185, 28, 28] : [4, 120, 87];
   const dajBg = metrics.accumulatedBalance < 0 ? [254, 242, 242] : [236, 253, 245];
 
+  const isVacExceeded = metrics.totalVacationConsumedDays > metrics.totalVacationDays;
+  const isDciExceeded = metrics.totalDciConsumedDays > metrics.totalDciDays;
+
+  const vacColor = isVacExceeded ? [185, 28, 28] : [15, 23, 42];
+  const vacBg = isVacExceeded ? [254, 242, 242] : [248, 250, 252];
+  const vacSub = isVacExceeded
+    ? `⚠️ +${(metrics.totalVacationConsumedDays - metrics.totalVacationDays).toFixed(1)} d sobre cupo`
+    : "Días pendientes / Totales año";
+
+  const dciColor = isDciExceeded ? [185, 28, 28] : [88, 28, 135];
+  const dciBg = isDciExceeded ? [254, 242, 242] : [250, 245, 255];
+  const dciSub = isDciExceeded
+    ? `⚠️ +${(metrics.totalDciConsumedDays - metrics.totalDciDays).toFixed(1)} d sobre cupo`
+    : "Días pendientes / Totales año";
+
   const cards = [
     {
       label: "EXCESO JORNADA (DAJ)",
@@ -2233,18 +2371,18 @@ export function exportarPDF() {
     {
       label: "BOLSA VACACIONES",
       val: `${metrics.remainingVacationDays} / ${metrics.totalVacationDays} d`,
-      sub: "Días pendientes / Totales año",
-      sub2: "",
-      color: [15, 23, 42],
-      bg: [248, 250, 252]
+      sub: vacSub,
+      sub2: `${metrics.totalVacationConsumedDays} d disfrutados`,
+      color: vacColor,
+      bg: vacBg
     },
     {
       label: "DÍAS DCI",
       val: `${metrics.remainingDciDays} / ${metrics.totalDciDays} d`,
-      sub: "Días pendientes / Totales año",
-      sub2: "",
-      color: [88, 28, 135],
-      bg: [250, 245, 255]
+      sub: dciSub,
+      sub2: `${metrics.totalDciConsumedDays} d disfrutados`,
+      color: dciColor,
+      bg: dciBg
     }
   ];
 
@@ -3212,8 +3350,15 @@ function initApp() {
       updateAll();
       triggerSave(true);
       editModal.classList.add("hidden");
+
+      const postEditMetrics = getAccumulatedMetrics();
+      const hasExcessVac = postEditMetrics.totalVacationConsumedDays > postEditMetrics.totalVacationDays;
+      const hasExcessDci = postEditMetrics.totalDciConsumedDays > postEditMetrics.totalDciDays;
+
       if (purged > 0) {
         showToast(`¡Parámetros actualizados! Se han eliminado ${purged} turno(s) que quedaban fuera del nuevo periodo de contrato.`, "info");
+      } else if (hasExcessVac || hasExcessDci) {
+        showToast("¡Parámetros actualizados! Atención: con las nuevas fechas, los días registrados de Vacaciones o DCI exceden el cupo devengado.", "warning");
       } else {
         showToast("¡Parámetros del nombramiento actualizados con éxito!", "success");
       }
