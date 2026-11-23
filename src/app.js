@@ -440,6 +440,9 @@ export function getMonthActiveContractDays(year, month) {
 }
 
 export function getActiveHolidaySaturdays(targetYear = AppState.calendarYear) {
+  if (AppState.config && AppState.config.regime !== "diurno") {
+    return [];
+  }
   const officialHolidaysInContract = getOfficialSaturdayHolidaysInContract(targetYear);
   const holidaySats = AppState.holidaySaturdays || {};
 
@@ -473,16 +476,16 @@ export function getActiveHolidaySaturdays(targetYear = AppState.calendarYear) {
 }
 
 export const OFFICIAL_SAS_HOLIDAYS = [
-  { month: 0, day: 1, name: "Año Nuevo" },
-  { month: 0, day: 6, name: "Epifanía del Señor (Reyes)" },
-  { month: 1, day: 28, name: "Día de Andalucía" },
-  { month: 4, day: 1, name: "Fiesta del Trabajo" },
-  { month: 7, day: 15, name: "Asunción de la Virgen" },
-  { month: 9, day: 12, name: "Fiesta Nacional de España" },
-  { month: 10, day: 1, name: "Todos los Santos" },
-  { month: 11, day: 6, name: "Día de la Constitución Española" },
-  { month: 11, day: 8, name: "Inmaculada Concepción" },
-  { month: 11, day: 25, name: "Natividad del Señor" }
+  { month: 0, day: 1, name: "Año Nuevo", short: "1 Ene" },
+  { month: 0, day: 6, name: "Epifanía del Señor (Reyes)", short: "Reyes" },
+  { month: 1, day: 28, name: "Día de Andalucía", short: "28F" },
+  { month: 4, day: 1, name: "Fiesta del Trabajo", short: "1 Mayo" },
+  { month: 7, day: 15, name: "Asunción de la Virgen", short: "Asunción" },
+  { month: 9, day: 12, name: "Fiesta Nacional de España", short: "12 Oct" },
+  { month: 10, day: 1, name: "Todos los Santos", short: "Todos Santos" },
+  { month: 11, day: 6, name: "Día de la Constitución Española", short: "Constitución" },
+  { month: 11, day: 8, name: "Inmaculada Concepción", short: "Inmaculada" },
+  { month: 11, day: 25, name: "Natividad del Señor", short: "Navidad" }
 ];
 
 export function getOfficialSaturdayHolidaysInContract(targetYear = AppState.calendarYear) {
@@ -492,7 +495,7 @@ export function getOfficialSaturdayHolidaysInContract(targetYear = AppState.cale
     if (d.getDay() === 6) { // Sábado
       const dateStr = `${targetYear}-${String(h.month + 1).padStart(2, "0")}-${String(h.day).padStart(2, "0")}`;
       if (isDateInsideContract(dateStr)) {
-        result.push({ dateStr, name: h.name, month: h.month, day: h.day });
+        result.push({ dateStr, name: h.name, short: h.short, month: h.month, day: h.day });
       }
     }
   });
@@ -500,21 +503,31 @@ export function getOfficialSaturdayHolidaysInContract(targetYear = AppState.cale
 }
 
 export function getDciExceptions(targetYear = AppState.calendarYear) {
+  const isDiurno = (AppState.config && AppState.config.regime === "diurno");
   const officialHolidaysInContract = getOfficialSaturdayHolidaysInContract(targetYear);
   const officialDateSet = new Set(officialHolidaysInContract.map(h => h.dateStr));
 
-  // 1. Sábados festivos (tope legal del SAS: máx. 2 al año dentro del contrato)
-  const allActiveSaturdays = getActiveHolidaySaturdays(targetYear);
-  const cappedHolidaySaturdays = allActiveSaturdays.slice(0, 2);
-  const saturdayHolidayDays = cappedHolidaySaturdays.length;
+  // 1. Sábados festivos (tope legal del SAS: máx. 2 al año dentro del contrato - SOLO Turno Diurno)
+  let saturdayHolidayDays = 0;
+  let cappedHolidaySaturdays = [];
+  let activeDefaultSats = [];
+  let activeLocalSats = [];
+  let availableLocalQuota = 0;
+  let defaultNamesList = [];
 
-  const activeDefaultSats = cappedHolidaySaturdays.filter(d => officialDateSet.has(d));
-  const activeLocalSats = cappedHolidaySaturdays.filter(d => !officialDateSet.has(d));
-  const availableLocalQuota = Math.max(0, 2 - saturdayHolidayDays);
+  if (isDiurno) {
+    const allActiveSaturdays = getActiveHolidaySaturdays(targetYear);
+    cappedHolidaySaturdays = allActiveSaturdays.slice(0, 2);
+    saturdayHolidayDays = cappedHolidaySaturdays.length;
 
-  const defaultNamesList = officialHolidaysInContract
-    .filter(h => cappedHolidaySaturdays.includes(h.dateStr))
-    .map(h => `${h.day} ${MONTH_NAMES[h.month].substring(0, 3)} (${h.name})`);
+    activeDefaultSats = cappedHolidaySaturdays.filter(d => officialDateSet.has(d));
+    activeLocalSats = cappedHolidaySaturdays.filter(d => !officialDateSet.has(d));
+    availableLocalQuota = Math.max(0, 2 - saturdayHolidayDays);
+
+    defaultNamesList = officialHolidaysInContract
+      .filter(h => cappedHolidaySaturdays.includes(h.dateStr))
+      .map(h => `${h.day} ${MONTH_NAMES[h.month].substring(0, 3)} (${h.name})`);
+  }
 
   // 2. Detección automática del 24 y 31 de diciembre en fin de semana (sábado o domingo)
   let dec24Extra = false;
@@ -542,6 +555,7 @@ export function getDciExceptions(targetYear = AppState.calendarYear) {
   const totalExtraDays = saturdayHolidayDays + decWeekendDays;
 
   return {
+    isDiurno,
     saturdayHolidayDays,
     cappedHolidaySaturdays,
     activeDefaultSats,
@@ -750,7 +764,7 @@ export function renderHolidaySaturdaysModal() {
         } else {
           const curEx = getDciExceptions(year);
           if (curEx.saturdayHolidayDays >= 2) {
-            showToast("Según la normativa del SAS, solo se compensan un máximo de 2 festivos en sábado al año.", "warning");
+            showToast("Ya has alcanzado el máximo legal de 2 festivos en sábado compensables en este año según la normativa del SAS.", "warning");
             return;
           }
           AppState.holidaySaturdays[targetDate] = true;
@@ -764,6 +778,10 @@ export function renderHolidaySaturdaysModal() {
 }
 
 export function openHolidaySaturdaysModal() {
+  if (AppState.config?.regime !== "diurno") {
+    showToast("La compensación de festivos en sábado solo es aplicable al Turno Diurno (Lunes a Viernes) según la normativa del SAS.", "warning");
+    return;
+  }
   const modal = document.getElementById("holiday-saturdays-modal");
   if (!modal) return;
   renderHolidaySaturdaysModal();
@@ -2026,6 +2044,16 @@ function renderKpis() {
       ldSubEl.textContent = `${metrics.totalDciConsumedDays} d disfrutados en cuadrante`;
     }
   }
+
+  // Tooltip explicativo dinámico según régimen en el icono (i) de la tarjeta DCI
+  const dciInfoEl = document.getElementById("kpi-dci-info");
+  if (dciInfoEl) {
+    if (AppState.config?.regime === "diurno") {
+      dciInfoEl.setAttribute("title", "1 día cada 2 meses trabajados (6/año) + hasta 2 festivos en sábado (los fijos de Andalucía se detectan solos; marca manualmente los locales si caen en sábado) + 24 y 31 dic. si caen en fin de semana.");
+    } else {
+      dciInfoEl.setAttribute("title", "1 día cada 2 meses trabajados (6/año). En turno rotatorio/nocturno los festivos en sábado no generan DCI adicionales.");
+    }
+  }
 }
 
 function renderCalendar() {
@@ -2038,6 +2066,16 @@ function renderCalendar() {
 
   document.getElementById("cal-select-month").value = month;
   document.getElementById("cal-year-display").textContent = year;
+
+  const isDiurno = (AppState.config?.regime === "diurno");
+  const btnHolidaySaturdays = document.getElementById("btn-open-holiday-saturdays");
+  if (btnHolidaySaturdays) {
+    if (isDiurno) {
+      btnHolidaySaturdays.classList.remove("hidden");
+    } else {
+      btnHolidaySaturdays.classList.add("hidden");
+    }
+  }
 
   const calSatBadge = document.getElementById("cal-sat-badge");
   const calSatDetails = document.getElementById("cal-sat-details");
@@ -2211,18 +2249,27 @@ function renderCalendar() {
     } else {
       // 1. Sábados festivos (solo en sábados dentro de contrato, excluyendo 24/31 dic que tienen su propia regla)
       if (isSaturday && !isDec24 && !isDec31) {
-        if (isSatHoliday) {
-          const offH = OFFICIAL_SAS_HOLIDAYS.find(h => h.month === month && h.day === day);
-          const holidayTitle = offH
-            ? `Sábado Festivo oficial SAS (${offH.name}): compensable (+1 día DCI). Toca para ver o modificar.`
-            : `Sábado Festivo local: compensable (+1 día DCI SAS). Toca para ver o modificar.`;
-          const badgeText = offH ? offH.name : "Festivo Local";
-          topHtml += `<button type="button" class="btn-open-holiday-modal-badge inline-flex items-center justify-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black bg-amber-500 text-white shadow-2xs hover:bg-amber-600 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="${holidayTitle}">★<span class="hidden sm:inline ml-0.5">${badgeText}</span></button>`;
+        const offH = OFFICIAL_SAS_HOLIDAYS.find(h => h.month === month && h.day === day);
+        if (isDiurno) {
+          if (isSatHoliday) {
+            const shortName = offH?.short || offH?.name;
+            const holidayTitle = offH
+              ? `Sábado Festivo oficial SAS (${offH.name}): compensable (+1 día DCI). Toca para ver o modificar.`
+              : `Sábado Festivo local: compensable (+1 día DCI SAS). Toca para ver o modificar.`;
+            const badgeText = offH ? `Festivo (${shortName})` : "Festivo Local";
+            topHtml += `<button type="button" class="btn-open-holiday-modal-badge inline-flex items-center justify-center gap-0.5 px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-black bg-amber-500 text-white shadow-2xs hover:bg-amber-600 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="${holidayTitle}">★<span class="hidden sm:inline ml-0.5">${badgeText}</span></button>`;
+          } else {
+            // En móviles NO mostramos nada para que el recuadro quede amplio y limpio.
+            // En pantallas sm+ (desktop) se muestra botón discreto sólo en hover si queda cupo local
+            if (dciEx.availableLocalQuota > 0) {
+              topHtml += `<button type="button" class="btn-open-holiday-modal-badge hidden sm:group-hover:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold text-slate-400 hover:text-amber-800 hover:bg-amber-100 border border-slate-200 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="Marcar como festivo local (+1 día DCI SAS)">☆ Festivo Local</button>`;
+            }
+          }
         } else {
-          // En móviles NO mostramos nada para que el recuadro quede amplio y limpio.
-          // En pantallas sm+ (desktop) se muestra botón discreto sólo en hover si queda cupo local
-          if (dciEx.availableLocalQuota > 0) {
-            topHtml += `<button type="button" class="btn-open-holiday-modal-badge hidden sm:group-hover:inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold text-slate-400 hover:text-amber-800 hover:bg-amber-100 border border-slate-200 transition-all cursor-pointer z-10 shrink-0" data-date="${dateStr}" title="Marcar como festivo local (+1 día DCI SAS)">☆ Festivo Local</button>`;
+          // Turno Rotatorio / Nocturno: etiqueta meramente informativa si coincide con festivo oficial SAS (sin sumar DCI)
+          if (offH) {
+            const shortName = offH?.short || offH?.name;
+            topHtml += `<span class="inline-flex items-center px-1 sm:px-1.5 py-0.5 rounded text-[8px] sm:text-[9px] font-semibold bg-slate-100 text-slate-500 border border-slate-200 shrink-0" title="Festivo oficial (${offH.name}). En turno rotatorio/nocturno no genera DCI adicional."><span class="sm:hidden">Fest.</span><span class="hidden sm:inline">${shortName}</span></span>`;
           }
         }
       } else if (isDec24) {

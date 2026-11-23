@@ -977,7 +977,7 @@
           <div class="flex items-center justify-between gap-1 mb-1.5">
             <div class="flex items-center gap-1.5 min-w-0">
               <span class="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-slate-500 truncate">DÍAS DCI</span>
-              <span class="inline-flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-help" title="1 día cada 2 meses trabajados (6/año) + hasta 2 festivos en sábado (márcalos en el calendario) + 24 y 31 dic. si caen en fin de semana.">
+              <span id="kpi-dci-info" class="inline-flex items-center text-slate-400 hover:text-slate-600 transition-colors cursor-help" title="1 día cada 2 meses trabajados (6/año) + hasta 2 festivos en sábado (los fijos de Andalucía se detectan solos; marca manualmente los locales si caen en sábado) + 24 y 31 dic. si caen en fin de semana.">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
               </span>
             </div>
@@ -1407,10 +1407,10 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
                   <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
                     <div class="font-bold text-amber-900 flex items-center gap-1.5">
-                      <span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black">★ Sábados Festivos (Máx. 2/año)</span>
+                      <span class="text-xs bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded font-black">★ Sábados Festivos (Máx. 2/año - Solo Turno Diurno)</span>
                     </div>
                     <p class="text-[11px] text-slate-600 leading-relaxed">
-                      Cuando un festivo oficial coincide en sábado, el SAS compensa al trabajador añadiendo <strong>+1 día DCI adicional</strong> por cada sábado festivo, con un <strong>tope legal de 2 festivos en sábado por año natural</strong>. Puedes marcarlos o desmarcarlos directamente en la celda del sábado en el Calendario.
+                      La compensación de festivos en sábado corresponde <strong>exclusivamente al personal con jornada ordinaria diurna (Lunes a Viernes / 1.540 h)</strong>, dado que en turno rotatorio y nocturno los festivos ya se encuentran ponderados en su cómputo anual o planilla de turnos. GestorSAS detecta automáticamente los <strong>10 festivos fijos nacionales y de Andalucía</strong> que caigan en sábado; si no se alcanza el <strong>tope legal de 2 festivos en sábado por año</strong>, el usuario puede marcar manualmente sus festivos locales. Cada sábado festivo compensado suma <strong>+1 día DCI adicional</strong>.
                     </p>
                   </div>
                   <div class="bg-white p-3 rounded-lg border border-slate-200 space-y-1.5">
